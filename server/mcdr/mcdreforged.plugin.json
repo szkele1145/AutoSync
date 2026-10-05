@@ -1,0 +1,18 @@
+{
+    "schema_version": 1,
+    "id": "autosync",
+    "version": "1.0.0",
+    "name": "AutoSync",
+    "description": {
+        "zh_cn": "为客户端生成模组分发清单（manifest.json）并提供 MSFP v1（裸 TCP，非 HTTP）文件分发服务：扫描分发目录、计算 SHA-256/SHA-1、查询 Modrinth 官方直链、对比上次清单生成 deletes、维护 512KB speedtest.bin 测速文件；可对 client-dist/mods 里的模组做纯客户端/双端/纯服务端分类并搬运到 server/mods；还可只读检查依赖、自动下载缺失前置。不用 HTTP 是因为阿里云大陆节点会按 Host 头拦截未备案域名的 HTTP 流量。",
+        "en_us": "Generates the client-side mod distribution manifest (manifest.json) and serves it over MSFP v1 (raw TCP, not HTTP). Scans the dist dir, hashes files (SHA-256/SHA-1), resolves official Modrinth CDN URLs, diffs against the previous manifest for deletes, and maintains a 512KB speedtest.bin. Also classifies mods in client-dist/mods as client-only / both-sides / server-only, checks dependencies read-only, and can download missing prerequisites. HTTP is avoided because Aliyun mainland nodes block HTTP traffic for domains without ICP filing."
+    },
+    "authors": [
+        "AutoSync"
+    ],
+    "link": "https://github.com/",
+    "dependencies": {
+        "mcdreforged": ">=2.10.0"
+    },
+    "entrypoint": "autosync.entry"
+}

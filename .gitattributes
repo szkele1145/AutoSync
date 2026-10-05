@@ -1,0 +1,23 @@
+# 统一换行符：仓库里一律用 LF，避免 Windows 检出后变成 CRLF 导致
+# 「server/mcdr/autosync/core 与 server/python/autosync 逐字节一致」的校验失败。
+* text=auto eol=lf
+
+# 二进制产物：不要做任何换行符转换
+*.jar  binary
+*.mcdr binary
+*.png  binary
+*.jpg  binary
+*.zip  binary
+
+# Windows 脚本保留 CRLF 更符合习惯（bat 用 CRLF 最稳）
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 让 git 正确识别语言、diff 更可读
+*.py   text diff=python
+*.md   text
+*.json text
+*.yml  text
+*.yaml text
+*.toml text
+*.ps1  text

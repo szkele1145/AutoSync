@@ -1,0 +1,146 @@
+# AutoSync 客户端配置（文件名固定为 mcpatch.yml）
+#
+# 放在与 AutoSync-1.0.0.jar 相同的目录。
+# 版本隔离（HMCL / PCL 的「版本隔离」开关）开启时，该目录就是 versions\<版本名>\，
+# 此时 base-path 必须写 '.'，否则会把文件更新到 .minecraft 的上级目录。
+#
+# 每一项的含义 / 默认值 / 建议值见 docs/客户端配置.md
+
+# ===== 更新源 =====
+# 可以写多个（同一台或多台服务端），客户端并发测速后自动选最快的那个。
+# 格式：主机:端口（MSFP 裸 TCP），由 frp 之类的隧道映射到服务端的 tcp_port。
+urls:
+  - mc.example.net:8123
+
+# 更新起始目录。版本隔离必须用 '.'（= jar 所在目录）
+# ''（空）= 自动搜索 .minecraft 的父目录；'.' = 当前工作目录；'..' = 上一级目录
+base-path: '.'
+
+# 记录客户端当前版本号的文件的相对路径
+version-file-path: version-label.txt
+
+# 同步失败时的行为
+# false = 中止游戏启动（推荐：避免带着残缺 mods 进服）
+# true  = 忽略错误继续启动（可能因为缺前置而崩游戏）
+allow-error: false
+
+# 窗口标题
+window-title: AutoSync
+
+# 更新完成 / 无更新时是否弹提示框（整合包建议 false，少打扰玩家）
+show-has-update-message: false
+show-no-update-message: false
+
+# 更新日志自动关闭时间（毫秒），0 = 不自动关闭，需要玩家手动点掉
+auto-close-changelogs: 0
+
+# 安静模式：true = 只在真的有文件要下载时才显示窗口（仅图形模式有效）
+silent-mode: false
+
+# 禁用主题（纯色窗口，用于排查主题渲染问题）
+disable-theme: false
+
+# ===== 更新源选择 =====
+# 启动时并发测速所有 urls，自动选综合得分最高的源
+# false = 按 urls 的书写顺序依次尝试
+auto-select-source: true
+
+# 手动锁定更新源，填写后跳过自动测速（例如 mc.example.net:8123）；留空表示不锁定
+manual-source: ''
+
+# 综合评分权重：吞吐 / 延迟（两者之和建议为 1.0）
+source-weight-speed: 0.8
+source-weight-latency: 0.2
+
+# 测速结果缓存时间（秒），未过期直接复用，避免每次启动都测速
+source-cache-seconds: 3600
+
+# 单个源的测速超时（毫秒）
+source-probe-timeout: 5000
+
+# 测速文件名（相对更新源根目录），服务端会生成同名的 512KB 文件
+source-speedtest-file: speedtest.bin
+
+# 多源分块聚合下载：把一个大文件的分块轮转分配给多个源，叠加多条线路带宽
+# 前提是所有源上的文件内容一致（仍然有 SHA-256 校验兜底）
+multi-source-download: true
+
+# ===== 下载来源模式（重点）=====
+# auto   = 每次同步开始时给 CDN 与服务端各测一次速，哪个快用哪个（默认，推荐）
+# cdn    = 强制走清单里的 CDN 直链（Modrinth 官方 CDN），失败自动回退服务端
+# server = 强制走自己的更新源，完全跳过 CDN（不测速、不尝试直链）
+# 旧的 prefer-cdn 仍可用：true 等价于 cdn，false 等价于 server；两个都写时以 source-mode 为准
+source-mode: auto
+
+# 测速样本的最小体积（MB）：只有不小于它的文件才会被挑来当测速样本
+speedtest-min-size-mb: 10
+
+# 每个来源的测速时长（毫秒）：CDN 与服务端并发测，各自在这个窗口内传多少算多少
+speedtest-duration-ms: 2000
+
+# CDN 速度达到服务端的这个比例就算「够快」，直接选 CDN
+# 判据：cdn_speed >= server_speed * cdn-prefer-ratio
+# 调小更偏向 CDN（省自己的带宽），调到 1 以上表示「CDN 必须比服务端更快才用它」
+cdn-prefer-ratio: 0.5
+
+# CDN 测速太慢时，把连接数翻倍重测一次的上限
+cdn-max-threads: 64
+
+# ===== CDN 直链 =====
+# 强制走更新源、不尝试 CDN 的文件名单（文件名通配或相对路径，不区分大小写）
+# 典型用途：CDN 上本来就没有的自托管文件，省掉一次注定失败的请求
+# 例如：Flashback-*.jar、mods/lib/*.jar
+cdn-exclude: []
+
+# CDN 的连接超时与读超时（毫秒）；只要还在持续收到数据就不会超时
+cdn-timeout: 15000
+
+# ===== 镜像模式（重点）=====
+# true  = 客户端 mods 目录必须与服务端清单完全一致：
+#         清单之外的文件（玩家自加的 mod）会被清理掉
+# false = 只维护清单里列出的文件，清单外的文件一概不碰（推荐给整合包 / 公共服）
+# 安全兜底：清单里一个 mods/ 条目都没有时绝不会执行清理，只打警告
+mirror-mode: false
+
+# 镜像模式下的清理方式
+# true  = 先移动到 <base-path>/.modsync-removed/ 下（保留相对路径），可人工找回
+# false = 直接删除，不可恢复
+mirror-backup: true
+
+# 自动禁用与服务器托管模组 modId 冲突的玩家自加模组
+# 开启后会把冲突的 jar 重命名为 xxx.jar.disabled，避免 NeoForge 因 Duplicate mod 崩溃
+detect-mod-conflicts: true
+
+# ===== 并发与超时 =====
+# 单文件分块下载的线程数（单个文件最多切成多少段）
+download-threads: 32
+
+# 启用多线程分块下载的最小文件大小（字节，默认 1MB）；更小的文件单线程下载
+download-threshold: 1048576
+
+# 同时下载多少个文件（1~16，超出会被夹到边界）
+# ★ 最大连接数 ≈ concurrent-files × download-threads，别把 frp 隧道打爆
+#   默认 2 × 32 = 64 条；小文件只占 1 条
+concurrent-files: 2
+
+# MSFP（裸 TCP）的连接超时与读超时（毫秒）
+tcp-timeout: 15000
+
+# 出现网络问题时的重试次数（建议 timeout × retries 控制在 20 秒以内）
+retries: 3
+
+# ===== 其它协议 / 调试项 =====
+# 私有协议超时（毫秒）
+private-timeout: 7000
+
+# HTTP 系列协议的超时（毫秒）
+http-timeout: 7000
+
+# HTTP 系列协议的自定义请求头
+http-headers: {}
+
+# 忽略 HTTPS 证书校验（仅在自签名证书场景下临时打开）
+ignore-ssl-cert: false
+
+# 测试模式：每次启动都重新下载全部文件，用于测速，会增加大量流量
+test-mode: false

@@ -1,0 +1,60 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+venv/
+.venv/
+env/
+
+# ---- AutoSync 运行时产物 ----
+autosync-data/
+config.json
+*.log
+client-dist/
+mods/
+deploy-config.json
+start-autosync.bat
+
+# ---- Java / Gradle（客户端源码与构建产物）----
+build/
+out/
+.gradle/
+gradle-app.setting
+*.class
+*.jar
+!client/AutoSync-1.0.0.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# ---- IDE / 编辑器 ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---- 操作系统 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ---- 敏感信息（绝对不要提交）----
+*.pem
+*.key
+*.p12
+*.jks
+.ssh/
+id_rsa*
+id_ed25519*
+frpc.toml
+frps.toml
+token.txt
+secrets.json

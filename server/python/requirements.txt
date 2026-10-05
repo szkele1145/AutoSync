@@ -1,0 +1,18 @@
+# AutoSync 只使用 Python 标准库，因此本文件故意不声明任何第三方依赖。
+#
+# 用到的标准库：
+#   hashlib, json, socket, socketserver, threading, time, os, re, tempfile,
+#   urllib.request / urllib.error / urllib.parse, pathlib, dataclasses, argparse,
+#   logging, fnmatch, zipfile, unicodedata
+#
+# 运行环境：Python 3.11+（在 3.12 / 3.14 上实测通过；目标环境 Ubuntu 24.04 / Python 3.12）。
+# 不需要 mcdreforged，也不需要 requests。
+#
+# 安装（Ubuntu 24）：
+#   sudo apt install -y python3
+#   git clone <本仓库> /opt/autosync && cd /opt/autosync/server/python
+#   python3 -m autosync --version        # 期望：AutoSync 1.0.0
+#   python3 -m autosync --base .. serve
+#
+# 如果你要改用第三方 HTTP 客户端（requests 等），请在这里显式声明，例如：
+#   requests>=2.31

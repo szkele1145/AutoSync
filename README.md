@@ -235,6 +235,7 @@ AutoSync/
 
 | 文档 | 内容 |
 | --- | --- |
+| [**相比原版的改进.md**](docs/相比原版的改进.md) | **对比 McPatch2 的改动与优化**：每个改动对应的痛点、具体做法、实测数据 —— 想快速了解这个项目做了什么，先看这篇 |
 | [部署-Linux.md](docs/部署-Linux.md) | Ubuntu 24 从零部署：Python 环境、解压、配置、systemd 开机自启、frp 端口转发、验证命令、常见坑 |
 | [部署-Windows.md](docs/部署-Windows.md) | Windows 上跑服务端：Python 安装、启动、防火墙放行、任务计划程序 / NSSM 两种自启方式 |
 | [客户端配置.md](docs/客户端配置.md) | `mcpatch.yml` 每个键的含义 / 默认值 / 建议值，重点讲镜像模式、来源模式与连接数 |

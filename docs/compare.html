@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>相比原版的改进 — AutoSync 文档</title>
+<meta name="description" content="逐条对比 McPatch2 的改动、痛点与实测数据">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e14;--panel:#10151f;--panel2:#141b26;--line:#1e2733;
+  --txt:#dfe6f0;--dim:#78839a;--dim2:#57606f;
+  --cyan:#56b6c2;--green:#98c379;--yellow:#e5c07b;--red:#e06c75;
+  --purple:#c678dd;--blue:#61afef;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);line-height:1.8;
+  font-family:"Cascadia Code","JetBrains Mono",Consolas,"Microsoft YaHei",-apple-system,sans-serif;
+  font-size:15px;-webkit-font-smoothing:antialiased}
+#bg{position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -8%,rgba(86,182,194,.12),transparent 62%),
+    radial-gradient(ellipse 50% 40% at 88% 106%,rgba(198,120,221,.09),transparent 60%),
+    var(--bg)}
+#grid{position:fixed;inset:-60%;z-index:-1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(86,182,194,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(86,182,194,.045) 1px,transparent 1px);
+  background-size:52px 52px;
+  transform:perspective(680px) rotateX(60deg);
+  mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%);
+  -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%)}
+
+header{position:sticky;top:0;z-index:50;backdrop-filter:blur(11px);
+  background:rgba(10,14,20,.86);border-bottom:1px solid var(--line)}
+.nav{max-width:1240px;margin:0 auto;padding:0 22px;display:flex;align-items:center;gap:22px;height:58px}
+.brand{font-weight:800;font-size:18px;text-decoration:none;
+  background:linear-gradient(100deg,var(--cyan),var(--blue) 45%,var(--purple) 82%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.nav a.lnk{color:var(--dim);text-decoration:none;font-size:13.5px}
+.nav a.lnk:hover{color:var(--cyan)}
+.nav .sp{flex:1}
+.nav a.gh{border:1px solid var(--line);padding:5px 13px;border-radius:7px;color:var(--txt);
+  text-decoration:none;font-size:13px}
+.nav a.gh:hover{border-color:var(--cyan);color:var(--cyan)}
+
+.layout{max-width:1240px;margin:0 auto;padding:30px 22px 70px;display:grid;
+  grid-template-columns:238px 1fr;gap:34px;align-items:start}
+aside{position:sticky;top:80px;background:var(--panel);border:1px solid var(--line);
+  border-radius:11px;padding:15px;max-height:calc(100vh - 110px);overflow:auto}
+aside .hd{font-size:11.5px;letter-spacing:.1em;color:var(--dim2);margin-bottom:11px}
+aside a{display:flex;gap:9px;padding:8px 10px;border-radius:7px;color:var(--dim);
+  text-decoration:none;font-size:13.5px;transition:.16s;margin-bottom:2px}
+aside a:hover{background:var(--panel2);color:var(--txt)}
+aside a.on{background:rgba(86,182,194,.11);color:var(--cyan);font-weight:600}
+aside a .ic{flex:none}
+
+main{min-width:0}
+.crumb{font-size:12.5px;color:var(--dim2);margin-bottom:16px}
+.crumb a{color:var(--dim);text-decoration:none}
+.crumb a:hover{color:var(--cyan)}
+
+article{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:clamp(22px,3.4vw,42px);overflow-wrap:break-word}
+article h1{font-size:clamp(25px,3.6vw,36px);font-weight:800;margin-bottom:8px;line-height:1.3}
+article h1::after{content:'';display:block;width:50px;height:3px;margin-top:15px;border-radius:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--purple))}
+article h2{font-size:clamp(19px,2.5vw,25px);font-weight:700;margin:38px 0 13px;
+  padding-top:19px;border-top:1px solid var(--line)}
+article h3{font-size:17.5px;font-weight:700;margin:26px 0 10px;color:var(--cyan)}
+article h4{font-size:15.5px;font-weight:700;margin:20px 0 8px;color:#b9c3d1}
+article p{margin:12px 0;color:#c6cedb}
+article a{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(86,182,194,.3)}
+article a:hover{border-bottom-color:var(--cyan)}
+article ul,article ol{margin:12px 0 12px 24px;color:#c6cedb}
+article li{margin:6px 0}
+article li::marker{color:var(--dim)}
+article strong{color:#eaf0f8;font-weight:700}
+article em{color:var(--yellow);font-style:normal}
+article hr{border:none;border-top:1px solid var(--line);margin:30px 0}
+article blockquote{border-left:3px solid var(--cyan);background:rgba(86,182,194,.05);
+  padding:11px 17px;border-radius:0 8px 8px 0;margin:16px 0;color:#aab4c2}
+article blockquote p{margin:5px 0;color:#aab4c2}
+
+article code{background:#0c1119;border:1px solid var(--line);border-radius:5px;
+  padding:2px 6px;font-size:13px;color:var(--yellow);font-family:inherit}
+article pre{background:#0c1119;border:1px solid var(--line);border-radius:9px;
+  padding:15px 18px;overflow-x:auto;margin:15px 0;font-size:13px;line-height:1.85}
+article pre code{background:none;border:none;padding:0;color:#c3cbd8;font-size:13px;
+  white-space:pre;display:block}
+
+article table{width:100%;border-collapse:collapse;margin:17px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+article th,article td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);
+  white-space:nowrap}
+article th{color:var(--dim);font-weight:600;font-size:12.5px;letter-spacing:.04em;
+  background:rgba(86,182,194,.035)}
+article td{color:#c2cad6}
+article tr:hover td{background:rgba(86,182,194,.03)}
+
+.pager{display:flex;justify-content:space-between;gap:13px;margin-top:24px;flex-wrap:wrap}
+.pager a{flex:1;min-width:180px;padding:13px 17px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel);text-decoration:none;transition:.2s}
+.pager a:hover{border-color:rgba(86,182,194,.45);background:var(--panel2)}
+.pager a .l{font-size:11.5px;color:var(--dim2);display:block;margin-bottom:3px}
+.pager a .t{font-size:14px;color:var(--txt);font-weight:600}
+.pager a.nx{text-align:right}
+
+footer{max-width:1240px;margin:0 auto;padding:30px 22px 50px;text-align:center;
+  color:var(--dim2);font-size:12.5px;border-top:1px solid var(--line)}
+footer a{color:var(--dim);text-decoration:none}
+footer a:hover{color:var(--cyan)}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr;gap:20px}
+  aside{position:static;max-height:none}
+  aside .list{display:flex;flex-wrap:wrap;gap:5px}
+  aside a{margin:0}
+}
+</style>
+</head>
+<body>
+<div id="bg"></div><div id="grid"></div>
+
+<header>
+  <div class="nav">
+    <a class="brand" href="index.html">AutoSync</a>
+    <a class="lnk" href="index.html">首页</a>
+    <a class="lnk" href="https://szkele1145.github.io/AutoSync/compare.html">改进对比</a>
+    <span class="sp"></span>
+    <a class="gh" href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="hd">文档</div>
+    <div class="list"><a href="index.html"><span class="ic">🏠</span>首页</a>
+      <a href="compare.html" class="on"><span class="ic">⚖️</span>相比原版的改进</a>
+      <a href="deploy-linux.html"><span class="ic">🐧</span>Linux 部署</a>
+      <a href="deploy-windows.html"><span class="ic">🪟</span>Windows 部署</a>
+      <a href="client-config.html"><span class="ic">⚙️</span>客户端配置</a>
+      <a href="server-python.html"><span class="ic">🐍</span>服务端 · Python 版</a>
+      <a href="server-mcdr.html"><span class="ic">🧩</span>服务端 · MCDR 版</a>
+      <a href="faq.html"><span class="ic">❓</span>常见问题</a>
+      <a href="msfp.html"><span class="ic">📡</span>MSFP 协议</a></div>
+  </aside>
+  <main>
+    <div class="crumb"><a href="index.html">首页</a> / 文档 / 相比原版的改进</div>
+    <article>
+<h1 id="autosync-mcpatch2">AutoSync 相比 McPatch2 的改动与优化</h1>
+<blockquote>
+<p>AutoSync 的客户端基于 <strong><a href="https://github.com/BalloonUpdate/McPatch2">BalloonUpdate/McPatch2</a></strong> 的 Java 客户端改造（MIT）。<br />
+本文逐条说明 <strong>改了什么、为什么改、解决了什么实际问题</strong>，全部有代码为证。</p>
+</blockquote>
+<hr />
+<h2 id="_1">一、先说结论</h2>
+<p>McPatch2 是一套成熟、通用的整合包更新框架（HTTP / WebDAV / Alist 多协议、清单增量更新）。<br />
+但国内中小型 MC 服务器有几个绕不开的现实问题，AutoSync 就是冲着这些场景做的：</p>
+<table>
+<thead>
+<tr>
+<th>现实问题</th>
+<th>常见做法</th>
+<th>AutoSync 的做法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>国内云服务器 <strong>HTTP 被 ICP 备案拦截</strong>（打开是"未备案"提示页）</td>
+<td>依赖 HTTP / WebDAV / Alist</td>
+<td><strong>自研 MSFP 裸 TCP 协议</strong>，直接穿透</td>
+</tr>
+<tr>
+<td>玩家版本不齐：自加 mod、残留旧 mod、手改文件</td>
+<td>只做增量更新，剩下的靠玩家自觉</td>
+<td><strong>镜像模式</strong>：客户端 <code>mods/</code> 强制与服务端清单完全一致</td>
+</tr>
+<tr>
+<td>服务器带宽有限，几百 MB × 每个玩家 = 成本很高</td>
+<td>全部从服务器拉</td>
+<td><strong>CDN / 服务端自动测速选源</strong>，能走 CDN 就走 CDN</td>
+</tr>
+<tr>
+<td>同步出问题玩家只会说"进不去"</td>
+<td>只有一个进度条</td>
+<td><strong>图形窗口实时日志</strong>，全程可见、可截图反馈</td>
+</tr>
+<tr>
+<td>玩家自加 mod 与服务器模组撞 modId 导致崩溃</td>
+<td>无检测</td>
+<td><strong>modId 冲突检测</strong>，自动禁用重复项</td>
+</tr>
+<tr>
+<td>慢速网络下大文件下载体验差</td>
+<td>单连接下载</td>
+<td><strong>多线程分块 + 文件级并发</strong>，实测 1.37 → 3.68 MB/s</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>一句话：<strong>McPatch2 给了框架，AutoSync 把它改造成了"国内服务器能直接用"的形态。</strong></p>
+</blockquote>
+<hr />
+<h2 id="_2">二、客户端：逐条改动</h2>
+<h3 id="1-msfp-tcp">1. MSFP —— 自研裸 TCP 分发协议 ★核心改动</h3>
+<p><strong>痛点</strong></p>
+<p>国内云服务器（阿里云 / 腾讯云大陆节点）对<strong>未备案域名或直接 IP 的 HTTP 访问</strong>会做拦截：浏览器/客户端拿到的是一个"未备案"提示页（响应头能看到 <code>Non-compliance ICP Filing</code>），而不是你要的文件。也就是说——<strong>HTTP 方案在国内云服务器上根本跑不起来</strong>，除非你去备案。</p>
+<p><strong>做法</strong></p>
+<p>自己实现了一套极简的裸 TCP 协议 <strong>MSFP</strong>（AutoSync File Transfer Protocol），不复用 HTTP：</p>
+<pre><code>GET &lt;start&gt; &lt;end&gt; &lt;path&gt;\n      →  OK &lt;length&gt;\n&lt;data&gt;      分块读取
+PING\n                          →  OK 0\n                    存活探测
+SIZE &lt;path&gt;\n                   →  OK &lt;size&gt;\n                取文件大小
+</code></pre>
+<ul>
+<li><strong>裸 TCP 不受 ICP 拦截影响</strong>（拦截的是 HTTP 层）</li>
+<li>协议极简：一轮一问一答，但支持 <strong>Range 分块</strong>、<strong>keep-alive</strong>、<strong>路径末尾放全文</strong>（含中文/空格/方括号的文件名不用转义）</li>
+<li>服务端做<strong>严格路径规范化</strong>，<code>../../etc/passwd</code> 这类越权访问会被拒绝</li>
+<li>客户端 <code>sync/TcpFileClient.java</code> 独立实现，与原有的 HTTP / WebDAV / Alist 协议并列，可按源切换</li>
+</ul>
+<p><strong>效果</strong></p>
+<p>不备案、不用域名，一台按量付费的云主机 + 一条 frp 隧道就能对外分发。</p>
+<hr />
+<h3 id="2-mods">2. 镜像模式 —— 根治"客户端 mods 不干净"</h3>
+<p><strong>痛点</strong></p>
+<p>增量更新的前提是"客户端只是缺文件"。但真实情况是：</p>
+<ul>
+<li>玩家自己加了一堆 mod（可能和服务器模组冲突）</li>
+<li>旧版本删掉的 mod 还留在 <code>mods/</code> 里</li>
+<li>有人手滑改了文件名或删了文件</li>
+<li>整合包更新后，新旧文件混在一起</li>
+</ul>
+<p>结果就是"服务端明明没这个 mod，客户端却加载了"，然后崩在某个莫名其妙的地方。</p>
+<p><strong>做法</strong></p>
+<p>新增 <code>mirror-mode</code>：客户端 <code>mods/</code> <strong>必须与服务端清单完全一致</strong>。</p>
+<ul>
+<li>清单外的一切文件（jar、<code>.disabled</code>、残留、玩家自加）→ 移到 <code>.modsync-removed/</code> <strong>备份</strong>而不是直接删除（给误操作留后悔药）</li>
+<li>清单内有、本地缺失或哈希不符 → 下载覆盖</li>
+<li>支持 <code>mirror-backup: false</code> 直接删除，或 <code>mirror-mode: false</code> 回到原来的增量模式（完全保留原版行为）</li>
+</ul>
+<p><strong>安全阀</strong></p>
+<ul>
+<li>服务端清单为空时<strong>拒绝清理</strong>（防止配置错目录把玩家 mods 全清了）</li>
+<li>清理前校验分发目录结构，异常时中止</li>
+</ul>
+<p><strong>效果</strong></p>
+<p>玩家无论怎么折腾 <code>mods/</code>，启动一次就回到"和服务端一模一样"的状态。<br />
+这一条彻底消灭了「版本不一致」这一类问题。</p>
+<hr />
+<h3 id="3-cdn">3. CDN / 服务端自动测速选源 —— 省服务器带宽，但不牺牲速度</h3>
+<p><strong>痛点</strong></p>
+<p>整合包动辄几百 MB 到 1 GB。全部从自己服务器拉：</p>
+<ul>
+<li>服务器带宽跑满，其他服务受影响</li>
+<li>玩家多的时候排队，下载很慢</li>
+<li>云厂商按流量计费的话，账单很痛</li>
+</ul>
+<p>但直接"强制走 CDN"也不对——国内访问 Modrinth CDN 实测只有 <strong>~0.24 MB/s</strong>，而自己的服务器（走 frp + 多线程）能到 <strong>3.6 MB/s</strong>，<strong>快 15 倍</strong>。玩家会骂人。</p>
+<p><strong>做法</strong></p>
+<p><strong>每次同步开始时先实测一次</strong>，再决定走哪边：</p>
+<pre><code>① 挑一个 &gt;10MB 的文件当样本（优先本次待下载的；都下好了就用&quot;影子样本&quot;）
+② CDN 与服务端【并发】各下载 2 秒，算出各自速度
+③ 判据：CDN 速度 ≥ 服务端速度 × cdn-prefer-ratio（默认 0.5）
+     满足 → 走 CDN（差距不大时优先省服务器带宽）
+     不满足 → 把 CDN 分块线程翻倍重测一次（上限 64）
+              仍不满足 → 走服务端
+④ 结果缓存 1 小时，期间不再重复测速
+</code></pre>
+<p>实况日志：</p>
+<pre><code>[测速] 样本 Flashback-0.39.10（201.0 MB，本次待下载）
+[测速] CDN 3.21 MB/s  |  服务端 1.42 MB/s  -&gt;  选 CDN（达服务端 226%）
+
+[测速] CDN 0.31 MB/s  |  服务端 2.80 MB/s  -&gt;  CDN 太慢，提升线程到 64 重测
+[测速] 重测 CDN 0.55 MB/s  |  服务端 2.80 MB/s  -&gt;  选服务端
+</code></pre>
+<p><strong>"影子测速"是个刻意的设计取舍</strong></p>
+<p>需求原话是"如果样本不是待下载的，就删了重新下测速"。我们改成了<strong>影子测速</strong>：只读清单信息，从两个源各下一小段到临时文件，测完立即删除。</p>
+<p>理由：为了测速去删玩家一个几百 MB 且已经是最新的文件，万一测速后断网/断电/被杀，文件就没了。<strong>测速不该有数据风险。</strong></p>
+<p><strong>其它细节</strong></p>
+<ul>
+<li>单连接 1 MB / 单来源 8 MB / 时长 2 秒，三层硬上限 —— 最坏情况（触发重测）额外流量约 24 MB</li>
+<li><code>cdn-exclude</code> 可指定哪些文件强制走服务端（Modrinth 上没有的自托管 mod 列在这里可少走弯路）</li>
+<li>CDN 失败（404 / 哈希不符 / 超时）→ <strong>自动回退服务端</strong>，同步不会中断</li>
+<li><code>source-mode</code> 可强制 <code>cdn</code> 或 <code>server</code>，也能一键关掉测速</li>
+</ul>
+<hr />
+<h3 id="4">4. 图形窗口实时日志 —— 出问题能自己看</h3>
+<p><strong>痛点</strong></p>
+<p>同步过程是个黑盒：只有一个进度条，卡住了也不知道卡在哪。玩家反馈"进不去"，你只能让他发日志文件——很多人连 <code>mcpatch.log</code> 在哪都找不到。</p>
+<p><strong>做法</strong></p>
+<p>在原有的 Swing 窗口下半部分加了一个<strong>实时日志区</strong>（可拖动分隔条调整比例）：</p>
+<ul>
+<li>日志产生即滚动显示，<strong>自动跟到底部</strong></li>
+<li>用户手动往上翻看历史时，<strong>新日志不会把视图拽回底部</strong>（翻回底部后自动恢复跟随）</li>
+<li>最多保留 2000 行（更早的看 <code>mcpatch.log</code>）</li>
+<li>统一单色、无边框、背景与窗口融合，滚动条 8px —— 视觉上"嵌进去"而不是"糊一块面板"</li>
+<li><code>windowless</code> 模式不弹窗（给无人值守/服务器用）</li>
+</ul>
+<p><strong>踩过的坑（值得一提）</strong></p>
+<ul>
+<li>Swing 的 <code>DefaultCaret</code> 会在<strong>稍后的另一个 EDT 任务</strong>里把视图拽到底，所以"只在追加日志时打标记"这种拦截方式根本无效 → 最终永久禁用 caret 的自动滚动，自己接管，并把 ↑↓/PageUp/PageDown/Home/End 显式绑到滚动条上</li>
+<li>判断"用户在不在底部"不能只看瞬时几何 —— 拖分隔条、缩放窗口、首次布局都会改变几何值而 <code>value</code> 不变，会导致判定瞬间失效并且<strong>永久不再自动滚动</strong> → 改成记录"我们最后自动滚到的位置"，只要 <code>value</code> 还停在那儿就算仍在跟随</li>
+</ul>
+<hr />
+<h3 id="5-modid">5. modId 冲突检测</h3>
+<p><strong>痛点</strong></p>
+<p>玩家自加的 mod 如果和服务器模组<strong>用了同一个 modId</strong>，加载时会直接崩，而且报错信息很难懂。</p>
+<p><strong>做法</strong></p>
+<p>新增 <code>sync/ModIdReader.java</code>：读取每个 jar 的 <code>META-INF/neoforge.mods.toml</code>（回退 <code>mods.toml</code>），解析出 modId；发现重复时把<strong>玩家那一个</strong>重命名为 <code>.disabled</code> 并从加载列表排除。</p>
+<p>镜像模式下这一层基本用不上（清单外的都被清掉了），但作为兜底保留。</p>
+<hr />
+<h3 id="6">6. 多线程分块 + 文件级并发</h3>
+<ul>
+<li><strong>单文件多线程分块</strong>：把一个文件切成若干段并发下载（<code>download-threads</code>，默认 32）</li>
+<li><strong>文件级并发</strong>：同时下载多个文件（<code>concurrent-files</code>，默认 2）</li>
+<li><strong>最大连接数 = concurrent-files × download-threads</strong>，默认 2 × 32 = <strong>64</strong></li>
+<li>小文件保护：CDN 路径下单个分段不小于 256 KB，1 MB 的小文件不会真的开 32 条连接</li>
+</ul>
+<p><strong>实测</strong>（4 个约 6 MB 的文件）：</p>
+<table>
+<thead>
+<tr>
+<th>线程数</th>
+<th>耗时</th>
+<th>速度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>18.2s</td>
+<td>1.37 MB/s</td>
+</tr>
+<tr>
+<td><strong>4</strong></td>
+<td><strong>6.8s</strong></td>
+<td><strong>3.68 MB/s</strong></td>
+</tr>
+<tr>
+<td>8</td>
+<td>6.4s</td>
+<td>3.89 MB/s</td>
+</tr>
+</tbody>
+</table>
+<p>4 线程就是性价比拐点，再往上收益很小但连接数翻倍。</p>
+<hr />
+<h2 id="_3">三、服务端：完全自研</h2>
+<p>原项目的管理端与本项目服务端是两套东西。本项目的服务端<strong>从零实现</strong>，Python 独立版与 MCDR 插件版<strong>共用同一套核心代码</strong>（构建时逐字节同步 + SHA-256 校验）。</p>
+<table>
+<thead>
+<tr>
+<th>能力</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>清单生成</strong></td>
+<td>扫描分发目录 + SHA-256 + Modrinth 批量查询（命中率实测 80.7%）+ 内容指纹版本号 + 原子写入</td>
+</tr>
+<tr>
+<td><strong>MSFP 服务</strong></td>
+<td>多线程、keep-alive、路径规范化、流量与连接统计</td>
+</tr>
+<tr>
+<td><strong>测速文件</strong></td>
+<td>确定性生成 512 KB <code>speedtest.bin</code> 供客户端多源测速</td>
+</tr>
+<tr>
+<td><strong>模组分类</strong></td>
+<td>按 Modrinth 的 <code>client_side</code> / <code>server_side</code> 分类为纯客户端 / 双端 / 纯服务端，自动搬运（默认"只复制不移走"，并保护被依赖的模组）</td>
+</tr>
+<tr>
+<td><strong>依赖检查</strong></td>
+<td>解析 jar 元数据<strong>含 JiJ 嵌套层</strong>，找出真缺失前置、循环依赖、版本不匹配</td>
+</tr>
+<tr>
+<td><strong>缺失前置下载</strong></td>
+<td>从 Modrinth 下载缺失前置，支持 CurseForge 官方 API 与免 key 的 CFWidget 兜底，哈希校验 + 冲突不覆盖</td>
+</tr>
+<tr>
+<td><strong>双形态</strong></td>
+<td><code>server/python/</code>（纯标准库，任意 Python 3.11+ 环境）+ <code>server/mcdr/</code>（MCDR 插件，命令树 / 权限 / 可点按钮）</td>
+</tr>
+<tr>
+<td><strong>输出风格</strong></td>
+<td>QBM 风格：彩色标题框 + <code>✔ ✘ ⚠ ℹ</code> 状态标记 + 缩进键值列表</td>
+</tr>
+<tr>
+<td><strong>部署工具</strong></td>
+<td>SSH 增量上传 + 远端重建清单、跨平台 MCDR 打包脚本</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_4">四、这些改动带来的实际收益</h2>
+<p>以一个 150 个 mod / <strong>817 MB</strong> 的整合包为例：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>改造前（传统 HTTP + 单源）</th>
+<th>AutoSync</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>国内云服务器可用性</td>
+<td>❌ HTTP 被 ICP 拦截</td>
+<td>✅ 裸 TCP 穿透</td>
+</tr>
+<tr>
+<td>玩家版本一致性</td>
+<td>靠自觉，经常崩</td>
+<td>✅ 强制镜像，每次启动校准</td>
+</tr>
+<tr>
+<td>下载速度</td>
+<td>1.37 MB/s（单线程）</td>
+<td><strong>3.68 MB/s</strong>（多线程）</td>
+</tr>
+<tr>
+<td>服务器带宽占用</td>
+<td>100% 从服务器拉</td>
+<td><strong>80.7% 的 mod 可走 CDN</strong></td>
+</tr>
+<tr>
+<td>出问题排查</td>
+<td>让玩家找日志文件</td>
+<td>✅ 窗口内实时可见</td>
+</tr>
+<tr>
+<td>玩家人工操作</td>
+<td>删旧整合包、重新下载、覆盖</td>
+<td>✅ <strong>点启动，其余全自动</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="mcpatch2">五、没有改的部分（沿用 McPatch2）</h2>
+<p>为了保持兼容与稳定，以下<strong>完全沿用原项目</strong>，没有动：</p>
+<ul>
+<li>清单（manifest）的结构与语义</li>
+<li>原有的 HTTP / WebDAV / Alist 协议实现</li>
+<li>客户端配置文件仍叫 <code>mcpatch.yml</code>（改名会让所有现有用户的配置失效）</li>
+<li>内部数据目录 <code>.modsync-temp</code> / <code>.modsync-removed</code> / <code>modsync/</code></li>
+<li><code>Premain-Class</code> 与 javaagent 挂载方式</li>
+<li>客户端源码的内部包名 <code>com.github.balloonupdate.mcpatch</code>（避免引入无谓风险）</li>
+</ul>
+<hr />
+<h2 id="_5">六、致谢</h2>
+<p>感谢 <a href="https://github.com/BalloonUpdate">BalloonUpdate</a> 开源 <a href="https://github.com/BalloonUpdate/McPatch2">McPatch2</a> 及其客户端实现 —— 本项目是在其基础上针对国内服务器场景做的改造与扩展。原始版权归 BalloonUpdate 所有（MIT）。</p>
+    </article>
+    <div class="pager"><a class="nx" href="deploy-linux.html"><span class="l">下一篇</span><span class="t">Linux 部署 →</span></a></div>
+  </main>
+</div>
+
+<footer>
+  <a href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub</a> ·
+  <a href="https://github.com/szkele1145/AutoSync/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a> ·
+  基于 <a href="https://github.com/BalloonUpdate/McPatch2" target="_blank" rel="noopener">McPatch2</a> 改造 ·
+  本项目由 <b style="color:var(--purple)">DeepSeek-V4.1-Flash</b> 辅助制作
+</footer>
+</body>
+</html>

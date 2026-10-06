@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>服务端 · MCDR 版 — AutoSync 文档</title>
+<meta name="description" content="MCDR 插件安装、命令与权限">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e14;--panel:#10151f;--panel2:#141b26;--line:#1e2733;
+  --txt:#dfe6f0;--dim:#78839a;--dim2:#57606f;
+  --cyan:#56b6c2;--green:#98c379;--yellow:#e5c07b;--red:#e06c75;
+  --purple:#c678dd;--blue:#61afef;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);line-height:1.8;
+  font-family:"Cascadia Code","JetBrains Mono",Consolas,"Microsoft YaHei",-apple-system,sans-serif;
+  font-size:15px;-webkit-font-smoothing:antialiased}
+#bg{position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -8%,rgba(86,182,194,.12),transparent 62%),
+    radial-gradient(ellipse 50% 40% at 88% 106%,rgba(198,120,221,.09),transparent 60%),
+    var(--bg)}
+#grid{position:fixed;inset:-60%;z-index:-1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(86,182,194,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(86,182,194,.045) 1px,transparent 1px);
+  background-size:52px 52px;
+  transform:perspective(680px) rotateX(60deg);
+  mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%);
+  -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%)}
+
+header{position:sticky;top:0;z-index:50;backdrop-filter:blur(11px);
+  background:rgba(10,14,20,.86);border-bottom:1px solid var(--line)}
+.nav{max-width:1240px;margin:0 auto;padding:0 22px;display:flex;align-items:center;gap:22px;height:58px}
+.brand{font-weight:800;font-size:18px;text-decoration:none;
+  background:linear-gradient(100deg,var(--cyan),var(--blue) 45%,var(--purple) 82%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.nav a.lnk{color:var(--dim);text-decoration:none;font-size:13.5px}
+.nav a.lnk:hover{color:var(--cyan)}
+.nav .sp{flex:1}
+.nav a.gh{border:1px solid var(--line);padding:5px 13px;border-radius:7px;color:var(--txt);
+  text-decoration:none;font-size:13px}
+.nav a.gh:hover{border-color:var(--cyan);color:var(--cyan)}
+
+.layout{max-width:1240px;margin:0 auto;padding:30px 22px 70px;display:grid;
+  grid-template-columns:238px 1fr;gap:34px;align-items:start}
+aside{position:sticky;top:80px;background:var(--panel);border:1px solid var(--line);
+  border-radius:11px;padding:15px;max-height:calc(100vh - 110px);overflow:auto}
+aside .hd{font-size:11.5px;letter-spacing:.1em;color:var(--dim2);margin-bottom:11px}
+aside a{display:flex;gap:9px;padding:8px 10px;border-radius:7px;color:var(--dim);
+  text-decoration:none;font-size:13.5px;transition:.16s;margin-bottom:2px}
+aside a:hover{background:var(--panel2);color:var(--txt)}
+aside a.on{background:rgba(86,182,194,.11);color:var(--cyan);font-weight:600}
+aside a .ic{flex:none}
+
+main{min-width:0}
+.crumb{font-size:12.5px;color:var(--dim2);margin-bottom:16px}
+.crumb a{color:var(--dim);text-decoration:none}
+.crumb a:hover{color:var(--cyan)}
+
+article{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:clamp(22px,3.4vw,42px);overflow-wrap:break-word}
+article h1{font-size:clamp(25px,3.6vw,36px);font-weight:800;margin-bottom:8px;line-height:1.3}
+article h1::after{content:'';display:block;width:50px;height:3px;margin-top:15px;border-radius:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--purple))}
+article h2{font-size:clamp(19px,2.5vw,25px);font-weight:700;margin:38px 0 13px;
+  padding-top:19px;border-top:1px solid var(--line)}
+article h3{font-size:17.5px;font-weight:700;margin:26px 0 10px;color:var(--cyan)}
+article h4{font-size:15.5px;font-weight:700;margin:20px 0 8px;color:#b9c3d1}
+article p{margin:12px 0;color:#c6cedb}
+article a{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(86,182,194,.3)}
+article a:hover{border-bottom-color:var(--cyan)}
+article ul,article ol{margin:12px 0 12px 24px;color:#c6cedb}
+article li{margin:6px 0}
+article li::marker{color:var(--dim)}
+article strong{color:#eaf0f8;font-weight:700}
+article em{color:var(--yellow);font-style:normal}
+article hr{border:none;border-top:1px solid var(--line);margin:30px 0}
+article blockquote{border-left:3px solid var(--cyan);background:rgba(86,182,194,.05);
+  padding:11px 17px;border-radius:0 8px 8px 0;margin:16px 0;color:#aab4c2}
+article blockquote p{margin:5px 0;color:#aab4c2}
+
+article code{background:#0c1119;border:1px solid var(--line);border-radius:5px;
+  padding:2px 6px;font-size:13px;color:var(--yellow);font-family:inherit}
+article pre{background:#0c1119;border:1px solid var(--line);border-radius:9px;
+  padding:15px 18px;overflow-x:auto;margin:15px 0;font-size:13px;line-height:1.85}
+article pre code{background:none;border:none;padding:0;color:#c3cbd8;font-size:13px;
+  white-space:pre;display:block}
+
+article table{width:100%;border-collapse:collapse;margin:17px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+article th,article td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);
+  white-space:nowrap}
+article th{color:var(--dim);font-weight:600;font-size:12.5px;letter-spacing:.04em;
+  background:rgba(86,182,194,.035)}
+article td{color:#c2cad6}
+article tr:hover td{background:rgba(86,182,194,.03)}
+
+.pager{display:flex;justify-content:space-between;gap:13px;margin-top:24px;flex-wrap:wrap}
+.pager a{flex:1;min-width:180px;padding:13px 17px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel);text-decoration:none;transition:.2s}
+.pager a:hover{border-color:rgba(86,182,194,.45);background:var(--panel2)}
+.pager a .l{font-size:11.5px;color:var(--dim2);display:block;margin-bottom:3px}
+.pager a .t{font-size:14px;color:var(--txt);font-weight:600}
+.pager a.nx{text-align:right}
+
+footer{max-width:1240px;margin:0 auto;padding:30px 22px 50px;text-align:center;
+  color:var(--dim2);font-size:12.5px;border-top:1px solid var(--line)}
+footer a{color:var(--dim);text-decoration:none}
+footer a:hover{color:var(--cyan)}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr;gap:20px}
+  aside{position:static;max-height:none}
+  aside .list{display:flex;flex-wrap:wrap;gap:5px}
+  aside a{margin:0}
+}
+</style>
+</head>
+<body>
+<div id="bg"></div><div id="grid"></div>
+
+<header>
+  <div class="nav">
+    <a class="brand" href="index.html">AutoSync</a>
+    <a class="lnk" href="index.html">首页</a>
+    <a class="lnk" href="https://szkele1145.github.io/AutoSync/compare.html">改进对比</a>
+    <span class="sp"></span>
+    <a class="gh" href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="hd">文档</div>
+    <div class="list"><a href="index.html"><span class="ic">🏠</span>首页</a>
+      <a href="compare.html"><span class="ic">⚖️</span>相比原版的改进</a>
+      <a href="deploy-linux.html"><span class="ic">🐧</span>Linux 部署</a>
+      <a href="deploy-windows.html"><span class="ic">🪟</span>Windows 部署</a>
+      <a href="client-config.html"><span class="ic">⚙️</span>客户端配置</a>
+      <a href="server-python.html"><span class="ic">🐍</span>服务端 · Python 版</a>
+      <a href="server-mcdr.html" class="on"><span class="ic">🧩</span>服务端 · MCDR 版</a>
+      <a href="faq.html"><span class="ic">❓</span>常见问题</a>
+      <a href="msfp.html"><span class="ic">📡</span>MSFP 协议</a></div>
+  </aside>
+  <main>
+    <div class="crumb"><a href="index.html">首页</a> / 文档 / 服务端 · MCDR 版</div>
+    <article>
+<h1 id="mcdr">服务端 · MCDR 版</h1>
+<p><code>server/mcdr/AutoSync-1.0.0.mcdr</code> 是给 <strong>MCDReforged（MCDR）</strong> 用的插件包：服务器已经在用 MCDR 管服时，装上它就能用 <code>!!autosync</code> 完成构建清单、分发文件、模组分类、依赖修复的全部操作。</p>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>插件 id</td>
+<td><code>autosync</code></td>
+</tr>
+<tr>
+<td>版本</td>
+<td><code>1.0.0</code></td>
+</tr>
+<tr>
+<td>依赖</td>
+<td>MCDR <strong>2.10+</strong>（在 2.16.0 上实测通过）</td>
+</tr>
+<tr>
+<td>入口点</td>
+<td><code>autosync.entry</code></td>
+</tr>
+<tr>
+<td>安装形态</td>
+<td>单文件 <code>.mcdr</code>（本质是 zip）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1">1. 安装</h2>
+<h3 id="11">1.1 三步安装</h3>
+<pre><code class="language-bash"># 1. 把插件放进 MCDR 的 plugins 目录
+cp server/mcdr/AutoSync-1.0.0.mcdr /path/to/mcdr/plugins/
+
+# 2. 让 MCDR 加载（旧版 MCDR 用 !!MCDR reload plugin，或直接重启 MCDR）
+!!MCDR plugin load autosync
+
+# 3. 在 MCDR 控制台里执行（控制台命令不带 !! 前缀也认）
+autosync help
+autosync status
+</code></pre>
+<blockquote>
+<p>控制台里可以直接输 <code>autosync build</code>（不带 <code>!!</code>），游戏内必须写 <code>!!autosync build</code>。</p>
+</blockquote>
+<h3 id="12">1.2 验证加载成功</h3>
+<p>看 MCDR 日志，应该出现：</p>
+<pre><code>Plugin autosync@1.0.0 loaded
+</code></pre>
+<p>以及插件自己打的：</p>
+<pre><code>AutoSync 正在加载 v1.0.0 ...
+AutoSync 已就绪：分发目录 .../server/client-dist · 配置 config/autosync/config.json
+AutoSync ✔ MSFP    服务运行中：0.0.0.0:8123（协议 MSFP v1）· 分发目录 ...
+</code></pre>
+<p>如果看到 <code>Fail to load plugin ... autosync-1.0.0.mcdr</code>，参考 <a href="常见问题.md">常见问题.md</a> 与本文第 6 节。</p>
+<hr />
+<h2 id="2">2. 配置文件在哪里</h2>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>配置</td>
+<td><code>&lt;MCDR 根目录&gt;/config/autosync/config.json</code></td>
+</tr>
+<tr>
+<td>数据 / 缓存 / 报告</td>
+<td><code>&lt;MCDR 根目录&gt;/config/autosync/autosync-data/</code></td>
+</tr>
+<tr>
+<td>分发目录（默认）</td>
+<td><code>&lt;MCDR 的 working_directory&gt;/client-dist</code>（一般是 <code>server/client-dist</code>）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>第一次加载会自动生成</strong> <code>config/autosync/config.json</code>（含全部键与中文注释）。</li>
+<li>兼容旧版：如果 MCDR 根目录下已经有一个 <code>config.json</code> 而 <code>config/autosync/config.json</code> 还不存在，插件会<strong>沿用根目录那份</strong>（方便从 ModSync 0.0.x 升级）。</li>
+<li>改完配置后执行 <code>!!autosync reload</code> 生效（不用重启 MCDR）。</li>
+</ul>
+<p>配置键与独立版<strong>完全一致</strong>，见 <a href="服务端-Python版.md#3-配置">服务端-Python版.md</a> 与 <code>server/mcdr/config.example.json</code>。两边仅有两处默认行为不同：</p>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>独立版</th>
+<th>MCDR 版</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base_dir: ""</code></td>
+<td><code>dist_dir</code> 相对<strong>当前工作目录</strong>解析</td>
+<td><code>dist_dir</code> 相对 MCDR 的 <code>working_directory</code>（通常是 <code>server/</code>）解析</td>
+</tr>
+<tr>
+<td><code>base_dir: "mcdr_root"</code></td>
+<td>等价于当前工作目录</td>
+<td>等价于 MCDR 根目录</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3">3. 完整命令表</h2>
+<p>游戏内前缀 <code>!!autosync</code>（<code>!!as</code> 是等价别名）。控制台里可以直接省略 <code>!!</code>。</p>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>权限</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>!!autosync</code> / <code>!!autosync help</code></td>
+<td>所有人</td>
+<td>显示帮助（<strong>每条命令都是可点按钮</strong>，点击后按回车执行）</td>
+</tr>
+<tr>
+<td><code>!!autosync status</code></td>
+<td>所有人</td>
+<td>文件数 / 清单版本 / MSFP 端口与连接统计 + 快捷按钮</td>
+</tr>
+<tr>
+<td><code>!!autosync build</code></td>
+<td>等级 2</td>
+<td>重建清单与测速文件（后台线程，会重写 <code>manifest.json</code>）</td>
+</tr>
+<tr>
+<td><code>!!autosync build refresh</code></td>
+<td>等级 2</td>
+<td>忽略 Modrinth 缓存强制重查后重建（更慢、请求更多）</td>
+</tr>
+<tr>
+<td><code>!!autosync reload</code></td>
+<td>等级 2</td>
+<td>重载 <code>config.json</code>，重建核心并重启 MSFP 与定时轮询</td>
+</tr>
+<tr>
+<td><code>!!autosync tcp start</code></td>
+<td>等级 2</td>
+<td>启动 MSFP（裸 TCP）分发服务</td>
+</tr>
+<tr>
+<td><code>!!autosync tcp stop</code></td>
+<td>等级 2</td>
+<td>停止 MSFP 服务</td>
+</tr>
+<tr>
+<td><code>!!autosync tcp restart</code></td>
+<td>等级 2</td>
+<td>重启 MSFP 服务</td>
+</tr>
+<tr>
+<td><code>!!autosync classify</code></td>
+<td>所有人</td>
+<td><strong>干跑</strong>分类：纯客户端 / 双端 / 纯服务端 / 待定（不改动任何文件）</td>
+</tr>
+<tr>
+<td><code>!!autosync classify apply</code></td>
+<td>等级 2</td>
+<td>按上次结果搬运（双端复制；纯服务端默认也只复制）</td>
+</tr>
+<tr>
+<td><code>!!autosync deps</code></td>
+<td>所有人</td>
+<td><strong>只读</strong>依赖检查（解析 jar 元数据，含 JiJ 嵌套层）</td>
+</tr>
+<tr>
+<td><code>!!autosync deps fix</code></td>
+<td>所有人</td>
+<td>列出缺失前置编号与候选版本（<strong>不下载任何文件</strong>）</td>
+</tr>
+<tr>
+<td><code>!!autosync deps fix 1a 2a</code></td>
+<td>等级 2</td>
+<td>只下载指定编号的前置</td>
+</tr>
+<tr>
+<td><code>!!autosync deps fix apply</code></td>
+<td>等级 2</td>
+<td>全选推荐候选并下载到 <code>&lt;dist_dir&gt;/mods/</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>权限说明</strong>：等级 2 = MCDR 的 <code>PermissionLevel.HELPER</code>。只读命令（<code>status</code> / <code>classify</code> / <code>deps</code> / <code>deps fix</code> / <code>help</code>）任何玩家都能用；会写盘或联网下载的命令需要等级 2。低权限玩家执行会收到一行 <code>✘ 权限不足 该操作需要权限等级 2</code>。</p>
+<h3 id="31">3.1 可点击按钮</h3>
+<p><code>!!autosync help</code> 的输出里，底部有一排快捷按钮：</p>
+<pre><code>[status] [build] [build refresh] [tcp restart] [classify] [deps] [deps fix] [help]
+</code></pre>
+<ul>
+<li><strong>游戏内</strong>：每个按钮都能点，鼠标悬停会显示用途与影响；点击后命令会<strong>填入聊天输入框</strong>（不是自动执行），<strong>按一次回车</strong>才会执行。</li>
+<li><strong>控制台</strong>：按钮退化成 <code>[标签]</code> 纯文本，点不了但完全可读、不报错。</li>
+</ul>
+<blockquote>
+<p>为什么是"填入聊天框"而不是"直接执行"：MC 1.19.1+ 的 <code>tellraw</code> 只接受以 <code>/</code> 开头的 <code>run_command</code> 值，而 <code>!!autosync xxx</code> 不以 <code>/</code> 开头，用 <code>run_command</code> 会<strong>静默失效</strong>（点了没反应）；<code>suggest_command</code> 是 1.19.1+ 上唯一可行的方案。</p>
+</blockquote>
+<hr />
+<h2 id="4-mcdr">4. 典型工作流（MCDR）</h2>
+<pre><code class="language-text"># 1. 第一次：把服务端 mods 里要发的模组硬链接/复制进分发目录
+#    （在 MCDR 所在机器上操作）
+mkdir -p server/client-dist/mods
+for f in server/mods/*.jar; do ln -f &quot;$f&quot; &quot;server/client-dist/mods/$(basename &quot;$f&quot;)&quot;; done
+
+# 2. 游戏内 / 控制台执行构建
+!!autosync build
+
+# 3. 看一眼结果
+!!autosync status
+
+# 4. 想让插件顺手把纯服务端模组挑出来（先干跑，确认无误再 apply）
+!!autosync classify
+!!autosync classify apply
+
+# 5. 玩家报告&quot;缺前置&quot;时
+!!autosync deps
+!!autosync deps fix
+!!autosync deps fix apply
+</code></pre>
+<p>改了配置之后：</p>
+<pre><code class="language-text">!!autosync reload
+</code></pre>
+<hr />
+<h2 id="5-python">5. 与独立 Python 版的差异汇总</h2>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th><a href="服务端-Python版.md">独立 Python 版</a></th>
+<th>MCDR 版</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>安装</td>
+<td>复制代码即可，只需 Python</td>
+<td>把 <code>.mcdr</code> 丢进 <code>plugins/</code></td>
+</tr>
+<tr>
+<td>依赖</td>
+<td>纯标准库</td>
+<td>MCDR 2.10+</td>
+</tr>
+<tr>
+<td>操作入口</td>
+<td><code>python3 -m autosync &lt;动作&gt;</code> / 交互 shell</td>
+<td><code>!!autosync &lt;子命令&gt;</code></td>
+</tr>
+<tr>
+<td>配置位置</td>
+<td>工作目录 <code>config.json</code></td>
+<td><code>config/autosync/config.json</code></td>
+</tr>
+<tr>
+<td>数据位置</td>
+<td>工作目录 <code>autosync-data/</code></td>
+<td><code>config/autosync/autosync-data/</code></td>
+</tr>
+<tr>
+<td>权限控制</td>
+<td>系统用户权限</td>
+<td>MCDR 权限等级（写操作需要等级 2）</td>
+</tr>
+<tr>
+<td>命令命名</td>
+<td><code>classify-apply</code> / <code>deps-fix</code>（kebab-case）</td>
+<td><code>classify apply</code> / <code>deps fix</code>（带空格）</td>
+</tr>
+<tr>
+<td>输出</td>
+<td>终端 ANSI 彩色</td>
+<td>MC 聊天栏 RText 彩色 + 可点按钮</td>
+</tr>
+<tr>
+<td><code>base_dir: ""</code></td>
+<td>当前工作目录</td>
+<td>MCDR 的 <code>working_directory</code>（<code>server/</code>）</td>
+</tr>
+<tr>
+<td>核心业务代码</td>
+<td><code>autosync/</code> 本体</td>
+<td><code>autosync/core/</code>（<strong>同一份代码的副本</strong>）</td>
+</tr>
+</tbody>
+</table>
+<p>清单格式、MSFP 协议、配置键<strong>完全一致</strong>，两边可以随时互换。</p>
+<h3 id="_1">代码复用说明</h3>
+<p>MCDR 版<strong>不复制业务逻辑</strong>：</p>
+<pre><code>server/python/autosync/      ← 唯一的一份核心代码（独立版本体）
+server/mcdr/autosync/core/   ← 构建时由 tools/build_mcdr.py 同步过来的逐字节副本
+server/mcdr/autosync/entry.py← MCDR 入口（唯一依赖 mcdreforged 的模块）
+</code></pre>
+<ul>
+<li><code>tools/build_mcdr.py</code>（跨平台，推荐）或 <code>tools/build-mcdr.ps1</code>（Windows）在打包前会把 <code>server/python/autosync</code> 复制到 <code>server/mcdr/autosync/core</code>，并逐个文件比对 SHA-256；<strong>任何一处不一致都会报错中止打包</strong>。</li>
+<li>入口模块用相对导入 <code>from .core.builder import AutoSyncCore</code> 使用核心，并直接复用 <code>from .core.shell import AutoSyncShell</code> 的交互层——MCDR 版只是把 shell 的输出通道换成了 RText。</li>
+<li>因此<strong>修 bug 只改 <code>server/python/autosync</code></strong>，然后执行一次打包脚本即可。</li>
+</ul>
+<hr />
+<h2 id="6-mcdr">6. 自己重新打包 <code>.mcdr</code></h2>
+<p>如果你改了核心代码或入口，需要重新生成插件包：</p>
+<pre><code class="language-bash"># 跨平台（Windows / Linux / macOS / CI 都推荐这个，纯标准库，无需 PowerShell）
+python tools/build_mcdr.py
+
+# 指定带 mcdreforged 的解释器 —— 会用它做真实的加载 + 命令注册验证
+python tools/build_mcdr.py --python /path/to/python
+
+# 改了版本号
+python tools/build_mcdr.py --version 1.0.1
+
+# 跳过入口校验（不推荐）
+python tools/build_mcdr.py --skip-verify
+</code></pre>
+<p>Windows 上也可以沿用 PowerShell 版（做的事完全一样）：</p>
+<pre><code class="language-powershell">pwsh -File tools/build-mcdr.ps1
+pwsh -File tools/build-mcdr.ps1 -SkipVerify
+</code></pre>
+<blockquote>
+<p>两个脚本在没装 mcdreforged 时都会自动退回 <code>tests/mcdr_stub</code> 桩做结构性校验。</p>
+</blockquote>
+<p>脚本会依次做：同步核心代码 → 比对 SHA-256 → 清 <code>__pycache__</code> → 校验入口 → 打成 zip → <strong>命名为 <code>.mcdr</code></strong>（<code>.mcdr</code> 本身就是 zip，只是后缀不同；zip 内路径必须是正斜杠）→ 用 <code>tools/check-mcdr-package.py</code> 检查包内结构与 <code>mcdreforged.plugin.json</code> 元数据 → 打印包内文件清单。</p>
+<p>手工验证包结构：</p>
+<pre><code class="language-bash">python tools/check-mcdr-package.py server/mcdr/AutoSync-1.0.0.mcdr
+</code></pre>
+<p>用真实 MCDR 验证入口（不启动服务端，只跑加载 + 命令注册 + <code>help</code> / <code>status</code> 的实际执行）：</p>
+<pre><code class="language-bash">pip install mcdreforged
+python tools/verify-mcdr-entry.py
+# 期望最后一行：结果：全部通过（真实 mcdreforged，8 个可点按钮）
+</code></pre>
+<h3 id="_2">包内结构</h3>
+<pre><code>AutoSync-1.0.0.mcdr   (zip)
+├── mcdreforged.plugin.json     id=autosync, version=1.0.0, entrypoint=autosync.entry
+├── autosync/
+│   ├── __init__.py             版本号 / 包说明
+│   ├── entry.py                MCDR 入口
+│   └── core/                   独立版核心代码的副本（16 个模块）
+└── config.example.json         默认配置参考
+</code></pre>
+<blockquote>
+<p><strong>为什么入口点在 <code>autosync.entry</code> 而不是 <code>autosync_mcdr.entry</code></strong>：MCDR 会校验入口点必须位于<strong>与插件 id 同名的包</strong>内，否则加载时报<br />
+<code>ValueError: Invalid entry point 'autosync_mcdr.entry' for plugin id 'autosync'</code>。<br />
+所以核心代码被放在 <code>autosync/core/</code> 子包里，入口直接在 <code>autosync</code> 包根上。</p>
+</blockquote>
+<hr />
+<h2 id="7">7. 卸载</h2>
+<pre><code class="language-text">!!MCDR plugin unload autosync
+</code></pre>
+<p>然后删掉 <code>plugins/AutoSync-1.0.0.mcdr</code>。插件卸载时会自动停掉 MSFP 服务与定时轮询线程，不会留下后台线程。</p>
+<p>配置与数据在 <code>config/autosync/</code> 下，按需删除。</p>
+    </article>
+    <div class="pager"><a href="server-python.html"><span class="l">上一篇</span><span class="t">← 服务端 · Python 版</span></a>
+      <a class="nx" href="faq.html"><span class="l">下一篇</span><span class="t">常见问题 →</span></a></div>
+  </main>
+</div>
+
+<footer>
+  <a href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub</a> ·
+  <a href="https://github.com/szkele1145/AutoSync/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a> ·
+  基于 <a href="https://github.com/BalloonUpdate/McPatch2" target="_blank" rel="noopener">McPatch2</a> 改造 ·
+  本项目由 <b style="color:var(--purple)">DeepSeek-V4.1-Flash</b> 辅助制作
+</footer>
+</body>
+</html>

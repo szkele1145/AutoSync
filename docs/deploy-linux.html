@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Linux 部署 — AutoSync 文档</title>
+<meta name="description" content="Ubuntu 24 从零部署 + systemd + frp">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e14;--panel:#10151f;--panel2:#141b26;--line:#1e2733;
+  --txt:#dfe6f0;--dim:#78839a;--dim2:#57606f;
+  --cyan:#56b6c2;--green:#98c379;--yellow:#e5c07b;--red:#e06c75;
+  --purple:#c678dd;--blue:#61afef;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);line-height:1.8;
+  font-family:"Cascadia Code","JetBrains Mono",Consolas,"Microsoft YaHei",-apple-system,sans-serif;
+  font-size:15px;-webkit-font-smoothing:antialiased}
+#bg{position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -8%,rgba(86,182,194,.12),transparent 62%),
+    radial-gradient(ellipse 50% 40% at 88% 106%,rgba(198,120,221,.09),transparent 60%),
+    var(--bg)}
+#grid{position:fixed;inset:-60%;z-index:-1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(86,182,194,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(86,182,194,.045) 1px,transparent 1px);
+  background-size:52px 52px;
+  transform:perspective(680px) rotateX(60deg);
+  mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%);
+  -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%)}
+
+header{position:sticky;top:0;z-index:50;backdrop-filter:blur(11px);
+  background:rgba(10,14,20,.86);border-bottom:1px solid var(--line)}
+.nav{max-width:1240px;margin:0 auto;padding:0 22px;display:flex;align-items:center;gap:22px;height:58px}
+.brand{font-weight:800;font-size:18px;text-decoration:none;
+  background:linear-gradient(100deg,var(--cyan),var(--blue) 45%,var(--purple) 82%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.nav a.lnk{color:var(--dim);text-decoration:none;font-size:13.5px}
+.nav a.lnk:hover{color:var(--cyan)}
+.nav .sp{flex:1}
+.nav a.gh{border:1px solid var(--line);padding:5px 13px;border-radius:7px;color:var(--txt);
+  text-decoration:none;font-size:13px}
+.nav a.gh:hover{border-color:var(--cyan);color:var(--cyan)}
+
+.layout{max-width:1240px;margin:0 auto;padding:30px 22px 70px;display:grid;
+  grid-template-columns:238px 1fr;gap:34px;align-items:start}
+aside{position:sticky;top:80px;background:var(--panel);border:1px solid var(--line);
+  border-radius:11px;padding:15px;max-height:calc(100vh - 110px);overflow:auto}
+aside .hd{font-size:11.5px;letter-spacing:.1em;color:var(--dim2);margin-bottom:11px}
+aside a{display:flex;gap:9px;padding:8px 10px;border-radius:7px;color:var(--dim);
+  text-decoration:none;font-size:13.5px;transition:.16s;margin-bottom:2px}
+aside a:hover{background:var(--panel2);color:var(--txt)}
+aside a.on{background:rgba(86,182,194,.11);color:var(--cyan);font-weight:600}
+aside a .ic{flex:none}
+
+main{min-width:0}
+.crumb{font-size:12.5px;color:var(--dim2);margin-bottom:16px}
+.crumb a{color:var(--dim);text-decoration:none}
+.crumb a:hover{color:var(--cyan)}
+
+article{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:clamp(22px,3.4vw,42px);overflow-wrap:break-word}
+article h1{font-size:clamp(25px,3.6vw,36px);font-weight:800;margin-bottom:8px;line-height:1.3}
+article h1::after{content:'';display:block;width:50px;height:3px;margin-top:15px;border-radius:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--purple))}
+article h2{font-size:clamp(19px,2.5vw,25px);font-weight:700;margin:38px 0 13px;
+  padding-top:19px;border-top:1px solid var(--line)}
+article h3{font-size:17.5px;font-weight:700;margin:26px 0 10px;color:var(--cyan)}
+article h4{font-size:15.5px;font-weight:700;margin:20px 0 8px;color:#b9c3d1}
+article p{margin:12px 0;color:#c6cedb}
+article a{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(86,182,194,.3)}
+article a:hover{border-bottom-color:var(--cyan)}
+article ul,article ol{margin:12px 0 12px 24px;color:#c6cedb}
+article li{margin:6px 0}
+article li::marker{color:var(--dim)}
+article strong{color:#eaf0f8;font-weight:700}
+article em{color:var(--yellow);font-style:normal}
+article hr{border:none;border-top:1px solid var(--line);margin:30px 0}
+article blockquote{border-left:3px solid var(--cyan);background:rgba(86,182,194,.05);
+  padding:11px 17px;border-radius:0 8px 8px 0;margin:16px 0;color:#aab4c2}
+article blockquote p{margin:5px 0;color:#aab4c2}
+
+article code{background:#0c1119;border:1px solid var(--line);border-radius:5px;
+  padding:2px 6px;font-size:13px;color:var(--yellow);font-family:inherit}
+article pre{background:#0c1119;border:1px solid var(--line);border-radius:9px;
+  padding:15px 18px;overflow-x:auto;margin:15px 0;font-size:13px;line-height:1.85}
+article pre code{background:none;border:none;padding:0;color:#c3cbd8;font-size:13px;
+  white-space:pre;display:block}
+
+article table{width:100%;border-collapse:collapse;margin:17px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+article th,article td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);
+  white-space:nowrap}
+article th{color:var(--dim);font-weight:600;font-size:12.5px;letter-spacing:.04em;
+  background:rgba(86,182,194,.035)}
+article td{color:#c2cad6}
+article tr:hover td{background:rgba(86,182,194,.03)}
+
+.pager{display:flex;justify-content:space-between;gap:13px;margin-top:24px;flex-wrap:wrap}
+.pager a{flex:1;min-width:180px;padding:13px 17px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel);text-decoration:none;transition:.2s}
+.pager a:hover{border-color:rgba(86,182,194,.45);background:var(--panel2)}
+.pager a .l{font-size:11.5px;color:var(--dim2);display:block;margin-bottom:3px}
+.pager a .t{font-size:14px;color:var(--txt);font-weight:600}
+.pager a.nx{text-align:right}
+
+footer{max-width:1240px;margin:0 auto;padding:30px 22px 50px;text-align:center;
+  color:var(--dim2);font-size:12.5px;border-top:1px solid var(--line)}
+footer a{color:var(--dim);text-decoration:none}
+footer a:hover{color:var(--cyan)}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr;gap:20px}
+  aside{position:static;max-height:none}
+  aside .list{display:flex;flex-wrap:wrap;gap:5px}
+  aside a{margin:0}
+}
+</style>
+</head>
+<body>
+<div id="bg"></div><div id="grid"></div>
+
+<header>
+  <div class="nav">
+    <a class="brand" href="index.html">AutoSync</a>
+    <a class="lnk" href="index.html">首页</a>
+    <a class="lnk" href="https://szkele1145.github.io/AutoSync/compare.html">改进对比</a>
+    <span class="sp"></span>
+    <a class="gh" href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="hd">文档</div>
+    <div class="list"><a href="index.html"><span class="ic">🏠</span>首页</a>
+      <a href="compare.html"><span class="ic">⚖️</span>相比原版的改进</a>
+      <a href="deploy-linux.html" class="on"><span class="ic">🐧</span>Linux 部署</a>
+      <a href="deploy-windows.html"><span class="ic">🪟</span>Windows 部署</a>
+      <a href="client-config.html"><span class="ic">⚙️</span>客户端配置</a>
+      <a href="server-python.html"><span class="ic">🐍</span>服务端 · Python 版</a>
+      <a href="server-mcdr.html"><span class="ic">🧩</span>服务端 · MCDR 版</a>
+      <a href="faq.html"><span class="ic">❓</span>常见问题</a>
+      <a href="msfp.html"><span class="ic">📡</span>MSFP 协议</a></div>
+  </aside>
+  <main>
+    <div class="crumb"><a href="index.html">首页</a> / 文档 / Linux 部署</div>
+    <article>
+<h1 id="linuxubuntu-2404">部署到 Linux（Ubuntu 24.04）</h1>
+<p>本文档从一台<strong>全新的 Ubuntu 24.04</strong> 开始，把 AutoSync 独立 Python 版服务端跑起来、开机自启、并通过 frp 把 MSFP 端口暴露到公网。</p>
+<p>全程只需要 Python 标准库，<strong>不需要 Docker、不需要 Nginx、不需要 requests</strong>。</p>
+<hr />
+<h2 id="0">0. 前置条件</h2>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>要求</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>系统</td>
+<td>Ubuntu 24.04 LTS（22.04 同样适用）</td>
+</tr>
+<tr>
+<td>Python</td>
+<td>3.11 及以上（Ubuntu 24.04 自带 3.12）</td>
+</tr>
+<tr>
+<td>权限</td>
+<td>能 <code>sudo</code></td>
+</tr>
+<tr>
+<td>网络</td>
+<td>能出网访问 <code>api.modrinth.com</code>（查 CDN 直链用）；玩家的更新源入口由 frp 提供</td>
+</tr>
+<tr>
+<td>客户端更新源</td>
+<td>一个公网可访问的 <code>主机:端口</code>（本文用 <code>mc.example.net:8123</code> 举例）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-python">1. 安装 Python</h2>
+<p>Ubuntu 24.04 默认已装 Python 3.12，先确认：</p>
+<pre><code class="language-bash">python3 --version
+# 期望输出：Python 3.12.x
+</code></pre>
+<p>如果没有（或版本低于 3.11）：</p>
+<pre><code class="language-bash">sudo apt update
+sudo apt install -y python3 python3-venv
+python3 --version
+</code></pre>
+<p>AutoSync 不依赖任何第三方包，所以<strong>不需要</strong> pip / venv。建议装个 git 方便更新：</p>
+<pre><code class="language-bash">sudo apt install -y git
+</code></pre>
+<hr />
+<h2 id="2">2. 放置代码</h2>
+<pre><code class="language-bash">sudo mkdir -p /opt/autosync
+sudo chown &quot;$USER&quot;:&quot;$USER&quot; /opt/autosync
+cd /opt/autosync
+
+# 方式 A：从仓库克隆（推荐，方便以后 git pull 更新）
+git clone &lt;你的仓库地址&gt; repo
+# 方式 B：把你的 AutoSync 目录直接上传到 /opt/autosync/repo
+
+ls repo/server/python
+# 期望看到：autosync/  config.example.json  requirements.txt  README.md
+</code></pre>
+<p>验证程序能跑：</p>
+<pre><code class="language-bash">cd /opt/autosync/repo/server/python
+python3 -m autosync --version
+# 期望输出：AutoSync 1.0.0
+</code></pre>
+<blockquote>
+<p>如果报 <code>No module named autosync</code>，说明你不在 <code>server/python</code> 目录下，或者目录名被改过。<code>autosync/</code> 这个包名和相对位置都不能动。</p>
+</blockquote>
+<hr />
+<h2 id="3">3. 准备分发目录</h2>
+<p><code>dist_dir</code> 是"要发给玩家的文件"的根目录。约定成 <code>client-dist/</code>，里面按客户端 <code>base-path</code> 的相对路径组织：</p>
+<pre><code class="language-bash">cd /opt/autosync/repo/server
+mkdir -p client-dist/mods
+</code></pre>
+<p>把要发的模组放进去。<strong>推荐用硬链接</strong>，这样客户端分发目录和服务端 <code>mods/</code> 指向同一份文件，不占额外磁盘：</p>
+<pre><code class="language-bash">cd /opt/autosync/repo/server
+for f in mods/*.jar; do
+  name=&quot;$(basename &quot;$f&quot;)&quot;
+  case &quot;$name&quot; in
+    # 这些是纯服务端模组，不要发给客户端（按你自己的情况增删）
+    coreprotect*|LuckPerms*|tabtps*|spark*) continue;;
+  esac
+  ln -f &quot;$f&quot; &quot;client-dist/mods/$name&quot;
+done
+
+ls client-dist/mods | head
+</code></pre>
+<p>只想额外发给客户端的模组（服务端不装）直接丢进 <code>client-dist/mods/</code> 即可。</p>
+<blockquote>
+<p>目录结构示例：<br />
+<code>/opt/autosync/repo/server/
+├── mods/                 服务端自己的模组
+├── client-dist/          要分发给客户端的根目录（= dist_dir）
+│   ├── mods/             要发的模组
+│   ├── config/           可选：要发的一份默认配置
+│   └── manifest.json     构建时自动生成
+├── config.json           服务端配置（第一次运行自动生成）
+└── autosync-data/        运行状态与缓存（state.json / 各类报告）</code></p>
+</blockquote>
+<hr />
+<h2 id="4">4. 生成并修改配置</h2>
+<p>第一次运行会在<strong>当前工作目录</strong>生成 <code>config.json</code>：</p>
+<pre><code class="language-bash">cd /opt/autosync/repo/server
+python3 -m autosync --base . status
+</code></pre>
+<p>该命令会创建 <code>config.json</code>、打印状态（此时文件数应为 0），然后退出。接着改这几项：</p>
+<pre><code class="language-bash">nano config.json
+</code></pre>
+<p>至少要确认的键：</p>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>建议值</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dist_dir</code></td>
+<td><code>"client-dist"</code></td>
+<td>默认值，指向上一步建好的目录</td>
+</tr>
+<tr>
+<td><code>base_dir</code></td>
+<td><code>""</code></td>
+<td>空 = 相对当前工作目录解析（systemd 里由 <code>WorkingDirectory</code> 决定）</td>
+</tr>
+<tr>
+<td><code>tcp_host</code></td>
+<td><code>"0.0.0.0"</code></td>
+<td>要接受 frp 从本机转发过来的连接</td>
+</tr>
+<tr>
+<td><code>tcp_port</code></td>
+<td><code>8123</code></td>
+<td>frp 的 <code>local_port</code> 要指向它</td>
+</tr>
+<tr>
+<td><code>tcp_enabled</code></td>
+<td><code>true</code></td>
+<td>关掉就不分发文件了</td>
+</tr>
+<tr>
+<td><code>speedtest_enabled</code></td>
+<td><code>true</code></td>
+<td>客户端靠 <code>speedtest.bin</code> 做多源测速</td>
+</tr>
+<tr>
+<td><code>poll_interval_seconds</code></td>
+<td><code>0</code></td>
+<td>0 = 关闭定时检测；用 <code>tools/deploy.py</code> 上传后手动 build 更可控</td>
+</tr>
+<tr>
+<td><code>allow_empty_dist</code></td>
+<td><code>false</code></td>
+<td><strong>保持 false</strong>：目录配错时宁可构建失败，也不要生成"全部删除"的清单把客户端 mods 清空</td>
+</tr>
+<tr>
+<td><code>classify_server_mods_dir</code></td>
+<td><code>"../mods"</code></td>
+<td>分类时服务端 mods 的位置（相对 <code>dist_dir</code>）</td>
+</tr>
+<tr>
+<td><code>deps_fix_game_version</code></td>
+<td>你的版本，如 <code>"1.21.1"</code></td>
+<td>自动补前置时用它筛版本</td>
+</tr>
+<tr>
+<td><code>deps_fix_loader</code></td>
+<td>你的加载器，如 <code>"neoforge"</code></td>
+<td>同上</td>
+</tr>
+<tr>
+<td><code>curseforge_api_key</code></td>
+<td><code>""</code> 或你的 key</td>
+<td>留空则用免 key 的 CFWidget 兜底（数据可能滞后）</td>
+</tr>
+</tbody>
+</table>
+<p>完整键与注释见 <code>server/python/config.example.json</code>。</p>
+<hr />
+<h2 id="5">5. 构建清单并验证</h2>
+<pre><code class="language-bash">cd /opt/autosync/repo/server
+python3 -m autosync --base . build
+</code></pre>
+<p>期望输出类似（QBM 风格框）：</p>
+<pre><code>  ✔ 文件总数    123 个 / 277.8 MB（jar 118 个）
+  ✔ 清单版本    2025-06-01-001（内容有变化）
+    清单大小    1.2 MB · 待删除 0 条
+</code></pre>
+<p>确认产物：</p>
+<pre><code class="language-bash">ls -lh client-dist/manifest.json client-dist/speedtest.bin
+python3 -c &quot;import json;d=json.load(open('client-dist/manifest.json'));print('version',d['version'],'files',len(d['files']))&quot;
+</code></pre>
+<p>跑一遍协议自检（会临时起一个 MSFP 服务，做 PING / SIZE / GET / 分块 / 并发 / 路径逃逸拦截）：</p>
+<pre><code class="language-bash">python3 -m autosync --base . check
+# 期望最后一行：结果：全部通过
+</code></pre>
+<hr />
+<h2 id="6">6. 手动启动（常驻）</h2>
+<pre><code class="language-bash">cd /opt/autosync/repo/server
+python3 -m autosync --base . serve
+</code></pre>
+<p>期望输出：</p>
+<pre><code>  ✔ MSFP    服务运行中：0.0.0.0:8123（协议 MSFP v1）· 目录 /opt/autosync/repo/server/client-dist（Ctrl+C 退出）
+</code></pre>
+<p>在另一台机器验证端口通不通：</p>
+<pre><code class="language-bash"># 在服务器本机
+ss -lntp | grep 8123
+
+# 在任意一台能访问的机器上（先确认防火墙/安全组已放行）
+nc -vz &lt;服务器IP&gt; 8123
+# 期望：succeeded!
+</code></pre>
+<p><code>Ctrl+C</code> 停止。</p>
+<p>也可以进交互式 shell（启动即拉起服务，再进 <code>AutoSync&gt;</code> 提示符）：</p>
+<pre><code class="language-bash">python3 -m autosync --base . shell
+# 提示符里输入 help 看命令，exit / quit 退出
+</code></pre>
+<hr />
+<h2 id="7-systemd">7. systemd 开机自启</h2>
+<p>创建服务单元（<strong>全文如下，可直接复制</strong>）：</p>
+<pre><code class="language-bash">sudo nano /etc/systemd/system/autosync.service
+</code></pre>
+<pre><code class="language-ini">[Unit]
+Description=AutoSync MSFP mod distribution server
+Documentation=https://github.com/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 换成实际的运行用户（不要用 root 跑业务进程）
+User=ubuntu
+Group=ubuntu
+# 关键：工作目录决定 config.json / client-dist / autosync-data 的位置
+WorkingDirectory=/opt/autosync/repo/server
+# 关键：--base . 让 dist_dir 相对工作目录解析
+ExecStart=/usr/bin/python3 -m autosync --base . serve
+Restart=always
+RestartSec=5
+# 日志走 journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autosync
+# 环境变量：关掉终端颜色，日志更干净
+Environment=NO_COLOR=1
+Environment=PYTHONUNBUFFERED=1
+# 一点基本加固
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+</code></pre>
+<p>把上面 <code>User</code> / <code>Group</code> / <code>WorkingDirectory</code> / <code>ExecStart</code> 换成你的实际情况，然后：</p>
+<pre><code class="language-bash">sudo systemctl daemon-reload
+sudo systemctl enable --now autosync
+sudo systemctl status autosync --no-pager
+</code></pre>
+<p>看日志：</p>
+<pre><code class="language-bash">sudo journalctl -u autosync -f
+</code></pre>
+<p>常用操作：</p>
+<pre><code class="language-bash">sudo systemctl restart autosync     # 改了 config.json 后重启
+sudo systemctl stop autosync
+sudo systemctl disable autosync     # 取消开机自启
+</code></pre>
+<blockquote>
+<p><strong>注意</strong>：改了 <code>config.json</code> 之后必须 <code>systemctl restart autosync</code>。独立版的 <code>serve</code> 只在启动时读一次配置（和 shell 里的 <code>reload</code> 命令不同）。</p>
+</blockquote>
+<hr />
+<h2 id="8-frp">8. frp 端口转发</h2>
+<p>服务端监听的是 <code>0.0.0.0:8123</code>，但公网玩家要连的是 frp 服务端上的一个端口。在<strong>运行 AutoSync 的这台机器</strong>上装 frpc：</p>
+<h3 id="81-frpc">8.1 安装 frpc</h3>
+<pre><code class="language-bash">cd /tmp
+# 换成 frp 的最新版本号；下面以 0.61.0 为例
+FRP_VER=0.61.0
+wget &quot;https://github.com/fatedier/frp/releases/download/v${FRP_VER}/frp_${FRP_VER}_linux_amd64.tar.gz&quot;
+tar -xzf &quot;frp_${FRP_VER}_linux_amd64.tar.gz&quot;
+sudo mv &quot;frp_${FRP_VER}_linux_amd64/frpc&quot; /usr/local/bin/frpc
+sudo chmod +x /usr/local/bin/frpc
+frpc --version
+</code></pre>
+<h3 id="82-frpc">8.2 配置 frpc</h3>
+<pre><code class="language-bash">sudo mkdir -p /etc/frp
+sudo nano /etc/frp/frpc.toml
+</code></pre>
+<pre><code class="language-toml"># frpc 配置：把本机 8123 暴露成 frps 上的 8123
+serverAddr = &quot;mc.example.net&quot;
+serverPort = 7000
+auth.method = &quot;token&quot;
+auth.token = &quot;把这里换成你的 frp token&quot;
+
+[[proxies]]
+name = &quot;autosync-msfp&quot;
+type = &quot;tcp&quot;
+localIP = &quot;127.0.0.1&quot;
+localPort = 8123
+remotePort = 8123
+</code></pre>
+<blockquote>
+<p><strong>不要</strong>把 <code>auth.token</code> 提交进任何仓库。放 <code>/etc/frp/frpc.toml</code> 里并 <code>sudo chmod 600 /etc/frp/frpc.toml</code>。</p>
+</blockquote>
+<h3 id="83-frpc">8.3 frpc 自启</h3>
+<pre><code class="language-bash">sudo nano /etc/systemd/system/frpc.service
+</code></pre>
+<pre><code class="language-ini">[Unit]
+Description=frp client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/frpc -c /etc/frp/frpc.toml
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
+</code></pre>
+<pre><code class="language-bash">sudo systemctl daemon-reload
+sudo systemctl enable --now frpc
+sudo systemctl status frpc --no-pager
+</code></pre>
+<h3 id="84">8.4 验证公网可达</h3>
+<pre><code class="language-bash"># 从任意一台外网机器
+nc -vz mc.example.net 8123
+# 期望：succeeded!
+</code></pre>
+<p>客户端 <code>mcpatch.yml</code> 里就写：</p>
+<pre><code class="language-yaml">urls:
+  - mc.example.net:8123
+</code></pre>
+<blockquote>
+<p>也可以直接填客户端用的域名，例如 <code>cn-cd-4.example.net:63358</code>——只要它最终转发到本机的 <code>8123</code>。</p>
+</blockquote>
+<h3 id="85">8.5 云厂商安全组</h3>
+<p>除了本机 <code>ufw</code>，<strong>云控制台的安全组也要放行</strong> <code>remotePort</code>（上面例子里的 8123）。这是最常见的"端口本机通、外网不通"的原因。</p>
+<pre><code class="language-bash"># 本机防火墙（如果开了 ufw）
+sudo ufw status
+# 只放行 frp 的入站端口即可，8123 本身不必对公网开放（frpc 走的是出站连接）
+sudo ufw allow 7000/tcp comment 'frp control'   # 仅当 frps 也在本机时才需要
+</code></pre>
+<hr />
+<h2 id="9">9. 日常更新模组</h2>
+<p>在<strong>你自己的电脑</strong>上（Windows 或 Linux 都行）用仓库里的上传工具：</p>
+<pre><code class="language-bash"># Linux / macOS
+cd /path/to/AutoSync
+export AUTOSYNC_HOST=你的服务器地址        # 例如 198.51.100.10
+export AUTOSYNC_PORT=22                    # SSH 端口
+export AUTOSYNC_USER=ubuntu
+export AUTOSYNC_KEY=~/.ssh/id_ed25519
+export AUTOSYNC_MODS=/path/to/local/mods
+export AUTOSYNC_ROOT=/opt/autosync/repo/server
+export AUTOSYNC_PYTHON=python3
+
+pip install paramiko
+python tools/deploy.py --dry-run           # 先看会传什么
+python tools/deploy.py                     # 上传 + 远端自动 build
+</code></pre>
+<p>它会：增量上传变化的 jar → 在远端执行 <code>python3 -m autosync --base . build</code> → 打印状态。</p>
+<p>加 <code>--delete</code> 会顺带删除服务器上多余的 jar（<strong>危险</strong>，确认无误再用；Windows 上的 <code>tools/upload.bat</code> 默认就带 <code>--delete</code>）。</p>
+<blockquote>
+<p><code>deploy.py</code> 里<strong>没有任何硬编码的服务器地址或密码</strong>，全部走环境变量或命令行参数，方便你把仓库公开。</p>
+</blockquote>
+<hr />
+<h2 id="10">10. 验证清单</h2>
+<p>上线前逐条过一遍：</p>
+<pre><code class="language-bash"># 1. 版本正确
+cd /opt/autosync/repo/server/python &amp;&amp; python3 -m autosync --version
+#    -&gt; AutoSync 1.0.0
+
+# 2. 清单存在且是合法 JSON
+cd /opt/autosync/repo/server &amp;&amp; python3 -c &quot;import json;print(len(json.load(open('client-dist/manifest.json'))['files']))&quot;
+
+# 3. 协议自检全过
+python3 -m autosync --base . check
+#    -&gt; 结果：全部通过
+
+# 4. 服务在跑
+sudo systemctl is-active autosync
+ss -lntp | grep 8123
+
+# 5. 外网端口通
+nc -vz mc.example.net 8123
+
+# 6. 客户端实机验证：改好 mcpatch.yml + -javaagent 参数，启动游戏，看窗口日志
+</code></pre>
+<hr />
+<h2 id="11">11. 常见坑</h2>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>python3 -m autosync</code> 报 <code>No module named autosync</code></td>
+<td>不在 <code>server/python</code> 目录下</td>
+<td><code>cd /opt/autosync/repo/server/python</code> 再执行，或加 <code>PYTHONPATH</code></td>
+</tr>
+<tr>
+<td><code>status</code> 显示 0 个文件</td>
+<td><code>dist_dir</code> 配错 / 空目录</td>
+<td>确认 <code>WorkingDirectory</code> 与 <code>base_dir</code>，<code>ls client-dist/mods</code> 有没有东西</td>
+</tr>
+<tr>
+<td><code>build</code> 报 "分发目录为空"</td>
+<td>触发了 <code>allow_empty_dist=false</code> 的保护</td>
+<td>这是<strong>故意的</strong>：检查目录配对了没有，别急着改成 true</td>
+</tr>
+<tr>
+<td>端口被占用</td>
+<td>8123 被别的进程占了</td>
+<td><code>ss -lntp \| grep 8123</code> 找到占用者，或改 <code>tcp_port</code>（同时改 frpc 的 <code>localPort</code>）</td>
+</tr>
+<tr>
+<td>客户端报 <code>Connection reset</code></td>
+<td>服务端没起来 / frpc 没转发 / 安全组没放行</td>
+<td>按 <a href="常见问题.md">常见问题.md</a> 第 1 条逐步排查</td>
+</tr>
+<tr>
+<td>systemd 启动失败</td>
+<td><code>ExecStart</code> 路径或 <code>WorkingDirectory</code> 写错</td>
+<td><code>sudo journalctl -u autosync -n 50 --no-pager</code> 看真实报错</td>
+</tr>
+<tr>
+<td>改了 <code>config.json</code> 不生效</td>
+<td><code>serve</code> 只读一次配置</td>
+<td><code>sudo systemctl restart autosync</code></td>
+</tr>
+<tr>
+<td>日志里中文乱码</td>
+<td>终端 locale</td>
+<td>单元文件里已经有 <code>NO_COLOR=1</code>；确认 <code>locale</code> 输出是 UTF-8</td>
+</tr>
+<tr>
+<td>想关掉彩色输出</td>
+<td>——</td>
+<td>环境变量 <code>NO_COLOR=1</code>（单元文件已设）</td>
+</tr>
+</tbody>
+</table>
+    </article>
+    <div class="pager"><a href="compare.html"><span class="l">上一篇</span><span class="t">← 相比原版的改进</span></a>
+      <a class="nx" href="deploy-windows.html"><span class="l">下一篇</span><span class="t">Windows 部署 →</span></a></div>
+  </main>
+</div>
+
+<footer>
+  <a href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub</a> ·
+  <a href="https://github.com/szkele1145/AutoSync/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a> ·
+  基于 <a href="https://github.com/BalloonUpdate/McPatch2" target="_blank" rel="noopener">McPatch2</a> 改造 ·
+  本项目由 <b style="color:var(--purple)">DeepSeek-V4.1-Flash</b> 辅助制作
+</footer>
+</body>
+</html>

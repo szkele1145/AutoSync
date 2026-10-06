@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Windows 部署 — AutoSync 文档</title>
+<meta name="description" content="Windows 上跑服务端 + 两种自启方式">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e14;--panel:#10151f;--panel2:#141b26;--line:#1e2733;
+  --txt:#dfe6f0;--dim:#78839a;--dim2:#57606f;
+  --cyan:#56b6c2;--green:#98c379;--yellow:#e5c07b;--red:#e06c75;
+  --purple:#c678dd;--blue:#61afef;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);line-height:1.8;
+  font-family:"Cascadia Code","JetBrains Mono",Consolas,"Microsoft YaHei",-apple-system,sans-serif;
+  font-size:15px;-webkit-font-smoothing:antialiased}
+#bg{position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -8%,rgba(86,182,194,.12),transparent 62%),
+    radial-gradient(ellipse 50% 40% at 88% 106%,rgba(198,120,221,.09),transparent 60%),
+    var(--bg)}
+#grid{position:fixed;inset:-60%;z-index:-1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(86,182,194,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(86,182,194,.045) 1px,transparent 1px);
+  background-size:52px 52px;
+  transform:perspective(680px) rotateX(60deg);
+  mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%);
+  -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%)}
+
+header{position:sticky;top:0;z-index:50;backdrop-filter:blur(11px);
+  background:rgba(10,14,20,.86);border-bottom:1px solid var(--line)}
+.nav{max-width:1240px;margin:0 auto;padding:0 22px;display:flex;align-items:center;gap:22px;height:58px}
+.brand{font-weight:800;font-size:18px;text-decoration:none;
+  background:linear-gradient(100deg,var(--cyan),var(--blue) 45%,var(--purple) 82%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.nav a.lnk{color:var(--dim);text-decoration:none;font-size:13.5px}
+.nav a.lnk:hover{color:var(--cyan)}
+.nav .sp{flex:1}
+.nav a.gh{border:1px solid var(--line);padding:5px 13px;border-radius:7px;color:var(--txt);
+  text-decoration:none;font-size:13px}
+.nav a.gh:hover{border-color:var(--cyan);color:var(--cyan)}
+
+.layout{max-width:1240px;margin:0 auto;padding:30px 22px 70px;display:grid;
+  grid-template-columns:238px 1fr;gap:34px;align-items:start}
+aside{position:sticky;top:80px;background:var(--panel);border:1px solid var(--line);
+  border-radius:11px;padding:15px;max-height:calc(100vh - 110px);overflow:auto}
+aside .hd{font-size:11.5px;letter-spacing:.1em;color:var(--dim2);margin-bottom:11px}
+aside a{display:flex;gap:9px;padding:8px 10px;border-radius:7px;color:var(--dim);
+  text-decoration:none;font-size:13.5px;transition:.16s;margin-bottom:2px}
+aside a:hover{background:var(--panel2);color:var(--txt)}
+aside a.on{background:rgba(86,182,194,.11);color:var(--cyan);font-weight:600}
+aside a .ic{flex:none}
+
+main{min-width:0}
+.crumb{font-size:12.5px;color:var(--dim2);margin-bottom:16px}
+.crumb a{color:var(--dim);text-decoration:none}
+.crumb a:hover{color:var(--cyan)}
+
+article{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:clamp(22px,3.4vw,42px);overflow-wrap:break-word}
+article h1{font-size:clamp(25px,3.6vw,36px);font-weight:800;margin-bottom:8px;line-height:1.3}
+article h1::after{content:'';display:block;width:50px;height:3px;margin-top:15px;border-radius:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--purple))}
+article h2{font-size:clamp(19px,2.5vw,25px);font-weight:700;margin:38px 0 13px;
+  padding-top:19px;border-top:1px solid var(--line)}
+article h3{font-size:17.5px;font-weight:700;margin:26px 0 10px;color:var(--cyan)}
+article h4{font-size:15.5px;font-weight:700;margin:20px 0 8px;color:#b9c3d1}
+article p{margin:12px 0;color:#c6cedb}
+article a{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(86,182,194,.3)}
+article a:hover{border-bottom-color:var(--cyan)}
+article ul,article ol{margin:12px 0 12px 24px;color:#c6cedb}
+article li{margin:6px 0}
+article li::marker{color:var(--dim)}
+article strong{color:#eaf0f8;font-weight:700}
+article em{color:var(--yellow);font-style:normal}
+article hr{border:none;border-top:1px solid var(--line);margin:30px 0}
+article blockquote{border-left:3px solid var(--cyan);background:rgba(86,182,194,.05);
+  padding:11px 17px;border-radius:0 8px 8px 0;margin:16px 0;color:#aab4c2}
+article blockquote p{margin:5px 0;color:#aab4c2}
+
+article code{background:#0c1119;border:1px solid var(--line);border-radius:5px;
+  padding:2px 6px;font-size:13px;color:var(--yellow);font-family:inherit}
+article pre{background:#0c1119;border:1px solid var(--line);border-radius:9px;
+  padding:15px 18px;overflow-x:auto;margin:15px 0;font-size:13px;line-height:1.85}
+article pre code{background:none;border:none;padding:0;color:#c3cbd8;font-size:13px;
+  white-space:pre;display:block}
+
+article table{width:100%;border-collapse:collapse;margin:17px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+article th,article td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);
+  white-space:nowrap}
+article th{color:var(--dim);font-weight:600;font-size:12.5px;letter-spacing:.04em;
+  background:rgba(86,182,194,.035)}
+article td{color:#c2cad6}
+article tr:hover td{background:rgba(86,182,194,.03)}
+
+.pager{display:flex;justify-content:space-between;gap:13px;margin-top:24px;flex-wrap:wrap}
+.pager a{flex:1;min-width:180px;padding:13px 17px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel);text-decoration:none;transition:.2s}
+.pager a:hover{border-color:rgba(86,182,194,.45);background:var(--panel2)}
+.pager a .l{font-size:11.5px;color:var(--dim2);display:block;margin-bottom:3px}
+.pager a .t{font-size:14px;color:var(--txt);font-weight:600}
+.pager a.nx{text-align:right}
+
+footer{max-width:1240px;margin:0 auto;padding:30px 22px 50px;text-align:center;
+  color:var(--dim2);font-size:12.5px;border-top:1px solid var(--line)}
+footer a{color:var(--dim);text-decoration:none}
+footer a:hover{color:var(--cyan)}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr;gap:20px}
+  aside{position:static;max-height:none}
+  aside .list{display:flex;flex-wrap:wrap;gap:5px}
+  aside a{margin:0}
+}
+</style>
+</head>
+<body>
+<div id="bg"></div><div id="grid"></div>
+
+<header>
+  <div class="nav">
+    <a class="brand" href="index.html">AutoSync</a>
+    <a class="lnk" href="index.html">首页</a>
+    <a class="lnk" href="https://szkele1145.github.io/AutoSync/compare.html">改进对比</a>
+    <span class="sp"></span>
+    <a class="gh" href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="hd">文档</div>
+    <div class="list"><a href="index.html"><span class="ic">🏠</span>首页</a>
+      <a href="compare.html"><span class="ic">⚖️</span>相比原版的改进</a>
+      <a href="deploy-linux.html"><span class="ic">🐧</span>Linux 部署</a>
+      <a href="deploy-windows.html" class="on"><span class="ic">🪟</span>Windows 部署</a>
+      <a href="client-config.html"><span class="ic">⚙️</span>客户端配置</a>
+      <a href="server-python.html"><span class="ic">🐍</span>服务端 · Python 版</a>
+      <a href="server-mcdr.html"><span class="ic">🧩</span>服务端 · MCDR 版</a>
+      <a href="faq.html"><span class="ic">❓</span>常见问题</a>
+      <a href="msfp.html"><span class="ic">📡</span>MSFP 协议</a></div>
+  </aside>
+  <main>
+    <div class="crumb"><a href="index.html">首页</a> / 文档 / Windows 部署</div>
+    <article>
+<h1 id="windows">部署到 Windows</h1>
+<p>本文档在一台 <strong>Windows 10 / 11</strong> 上部署 AutoSync 独立 Python 版服务端，并给出两种开机自启方式（任务计划程序 / NSSM）。</p>
+<p>如果你服务器跑的是 MCDR，请直接看 <a href="服务端-MCDR版.md">服务端-MCDR版.md</a>——那种情况下不需要本文档。</p>
+<hr />
+<h2 id="0">0. 前置条件</h2>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>要求</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>系统</td>
+<td>Windows 10 / 11 或 Windows Server 2019+</td>
+</tr>
+<tr>
+<td>Python</td>
+<td>3.11 及以上（推荐 3.12 / 3.14），<strong>纯标准库</strong>，无需 pip 装包</td>
+</tr>
+<tr>
+<td>权限</td>
+<td>安装 Python 需要管理员；之后运行不需要</td>
+</tr>
+<tr>
+<td>端口</td>
+<td>规划好 MSFP 端口（默认 <code>8123</code>），并确认防火墙 / 云安全组放行</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-python">1. 安装 Python</h2>
+<h3 id="11">1.1 官方安装包（推荐）</h3>
+<ol>
+<li>打开 <a href="https://www.python.org/downloads/windows/">https://www.python.org/downloads/windows/</a>，下载 <strong>Windows installer (64-bit)</strong> 的 3.12 或更新版本；</li>
+<li>运行安装包，<strong>务必勾选 <code>Add python.exe to PATH</code></strong>，然后点 <code>Install Now</code>；</li>
+<li>安装完成后开一个新的 PowerShell 窗口验证：</li>
+</ol>
+<pre><code class="language-powershell">python --version
+# 期望：Python 3.12.x（或更高）
+</code></pre>
+<p>如果 <code>python --version</code> 打开的是微软商店：<br />
+<strong>设置 → 应用 → 高级应用设置 → 应用执行别名</strong>，把 <code>python.exe</code> / <code>python3.exe</code> 两个别名关掉，再重新验证。</p>
+<h3 id="12-pythoncore">1.2 免安装的绿色版（pythoncore 发行版）</h3>
+<p>如果不想装到系统里，可以下载 <code>pythoncore</code> 这类免安装发行版，解压后直接用完整路径调用，例如：</p>
+<pre><code class="language-powershell">&amp; &quot;$env:LOCALAPPDATA\Python\pythoncore-3.14-64\python.exe&quot; --version
+</code></pre>
+<p>后面所有命令把 <code>python</code> 换成这个完整路径即可（自启脚本里同理）。</p>
+<hr />
+<h2 id="2">2. 放置代码</h2>
+<pre><code class="language-powershell"># 假设放到 C:\AutoSync（路径不要带中文和空格，省掉一堆转义麻烦）
+New-Item -ItemType Directory -Force -Path C:\AutoSync | Out-Null
+cd C:\AutoSync
+
+# 从 git 克隆（已装 Git 的话）
+git clone &lt;你的仓库地址&gt; repo
+# 或者：把 AutoSync 目录直接复制成 C:\AutoSync\repo
+</code></pre>
+<p>验证：</p>
+<pre><code class="language-powershell">cd C:\AutoSync\repo\server\python
+python -m autosync --version
+# 期望输出：AutoSync 1.0.0
+</code></pre>
+<blockquote>
+<p>如果中文输出变成乱码，先执行 <code>chcp 65001</code>，或设置 <code>$env:PYTHONIOENCODING="utf-8"</code>。</p>
+</blockquote>
+<hr />
+<h2 id="3">3. 准备分发目录</h2>
+<pre><code class="language-powershell">cd C:\AutoSync\repo\server
+New-Item -ItemType Directory -Force -Path client-dist\mods | Out-Null
+
+# 把要发给客户端的模组复制进去（服务端 mods 里那些纯服务端模组不要复制）
+Copy-Item .\mods\*.jar .\client-dist\mods\ -Force
+</code></pre>
+<blockquote>
+<p><strong>硬链接省空间</strong>：Windows 上可以用 <code>mklink /H</code> 建硬链接，让 <code>client-dist\mods</code> 和服务端 <code>mods</code> 指向同一份数据（同一磁盘分区内才行）：<br />
+<code>cmd
+cd /d C:\AutoSync\repo\server
+for %f in (mods\*.jar) do mklink /H "client-dist\mods\%~nxf" "%f"</code><br />
+注意：硬链接下改了其中一份，另一份也会变，这正是我们要的效果。</p>
+</blockquote>
+<hr />
+<h2 id="4">4. 生成并修改配置</h2>
+<pre><code class="language-powershell">cd C:\AutoSync\repo\server
+python -m autosync --base . status
+</code></pre>
+<p>第一次运行会在当前目录生成 <code>config.json</code>。用记事本或 VS Code 打开，确认/修改：</p>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>建议值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dist_dir</code></td>
+<td><code>"client-dist"</code></td>
+<td>要分发的目录</td>
+</tr>
+<tr>
+<td><code>base_dir</code></td>
+<td><code>""</code></td>
+<td>空 = 相对当前工作目录解析</td>
+</tr>
+<tr>
+<td><code>tcp_host</code></td>
+<td><code>"0.0.0.0"</code></td>
+<td>接受来自隧道 / 局域网的连接</td>
+</tr>
+<tr>
+<td><code>tcp_port</code></td>
+<td><code>8123</code></td>
+<td>MSFP 端口</td>
+</tr>
+<tr>
+<td><code>tcp_enabled</code></td>
+<td><code>true</code></td>
+<td>关掉就不分发</td>
+</tr>
+<tr>
+<td><code>speedtest_enabled</code></td>
+<td><code>true</code></td>
+<td>客户端靠它多源测速</td>
+</tr>
+<tr>
+<td><code>poll_interval_seconds</code></td>
+<td><code>0</code></td>
+<td>关闭定时检测（手动 build 更可控）</td>
+</tr>
+<tr>
+<td><code>allow_empty_dist</code></td>
+<td><code>false</code></td>
+<td><strong>保持 false</strong>，避免目录配错时生成空清单清空客户端</td>
+</tr>
+<tr>
+<td><code>classify_server_mods_dir</code></td>
+<td><code>"../mods"</code></td>
+<td>分类时服务端 mods 的位置</td>
+</tr>
+<tr>
+<td><code>deps_fix_game_version</code> / <code>deps_fix_loader</code></td>
+<td>你的版本 / 加载器</td>
+<td>自动补前置时筛版本用</td>
+</tr>
+</tbody>
+</table>
+<p>改完保存。</p>
+<hr />
+<h2 id="5">5. 构建清单并自检</h2>
+<pre><code class="language-powershell">cd C:\AutoSync\repo\server
+python -m autosync --base . build
+python -m autosync --base . check
+</code></pre>
+<p><code>check</code> 会临时起一个 MSFP 服务，跑 PING / SIZE / GET / 分块 / 并发 / 路径逃逸拦截，最后一行应是：</p>
+<pre><code>结果：全部通过
+</code></pre>
+<hr />
+<h2 id="6">6. 启动服务</h2>
+<h3 id="61">6.1 前台运行（先验证）</h3>
+<pre><code class="language-powershell">cd C:\AutoSync\repo\server
+python -m autosync --base . serve
+</code></pre>
+<p>期望：</p>
+<pre><code>  ✔ MSFP    服务运行中：0.0.0.0:8123（协议 MSFP v1）· 目录 C:\AutoSync\repo\server\client-dist（Ctrl+C 退出）
+</code></pre>
+<p><code>Ctrl+C</code> 停止。</p>
+<h3 id="62-shell">6.2 交互式 shell</h3>
+<pre><code class="language-powershell">cd C:\AutoSync\repo\server
+python -m autosync --base . shell
+</code></pre>
+<p>进入 <code>AutoSync&gt;</code> 提示符后可以敲 <code>status</code> / <code>build</code> / <code>reload</code> / <code>deps fix</code> 等命令（<strong>不带前缀</strong>），<code>help</code> 看全部命令，<code>exit</code> 退出。</p>
+<hr />
+<h2 id="7">7. 防火墙与端口</h2>
+<h3 id="71">7.1 本机防火墙放行</h3>
+<p>MSFP 端口要能被隧道 / 外网访问。<strong>以管理员身份</strong>打开 PowerShell：</p>
+<pre><code class="language-powershell">New-NetFirewallRule -DisplayName &quot;AutoSync MSFP 8123&quot; `
+    -Direction Inbound -Protocol TCP -LocalPort 8123 -Action Allow
+</code></pre>
+<p>查看 / 删除规则：</p>
+<pre><code class="language-powershell">Get-NetFirewallRule -DisplayName &quot;AutoSync MSFP 8123&quot; | Format-Table DisplayName, Enabled, Direction, Action
+Remove-NetFirewallRule -DisplayName &quot;AutoSync MSFP 8123&quot;   # 不再需要时删除
+</code></pre>
+<blockquote>
+<p><strong>更安全的做法</strong>：如果客户端是通过本机 frpc 隧道进来的（<code>localIP = 127.0.0.1</code>），那 8123 <strong>完全不需要</strong>对公网开放，只留 <code>127.0.0.1</code> 监听即可：<br />
+```powershell</p>
+<h1 id="configjson-tcp_host-127001">config.json 里把 tcp_host 改成 "127.0.0.1"，然后就不用加防火墙规则了</h1>
+<p>```</p>
+</blockquote>
+<h3 id="72">7.2 云服务器安全组</h3>
+<p>如果这台机器在云上（阿里云 / 腾讯云等），还要在控制台的<strong>安全组</strong>里放行对外的那个端口（frps 的 <code>remotePort</code>）。这是"本机通、外网不通"的最常见原因。</p>
+<h3 id="73">7.3 验证端口</h3>
+<pre><code class="language-powershell"># 本机看监听
+Get-NetTCPConnection -LocalPort 8123 -State Listen | Format-Table LocalAddress, LocalPort, OwningProcess
+
+# 从另一台机器测试（Windows 10+ 自带 Test-NetConnection）
+Test-NetConnection mc.example.net -Port 8123
+# 期望：TcpTestSucceeded : True
+</code></pre>
+<h3 id="74-frp">7.4 frp 隧道</h3>
+<p>和 Linux 完全一样，只是路径不同：下载 <code>frp_*_windows_amd64.zip</code>，解压后编辑 <code>frpc.toml</code>：</p>
+<pre><code class="language-toml">serverAddr = &quot;mc.example.net&quot;
+serverPort = 7000
+auth.method = &quot;token&quot;
+auth.token = &quot;把这里换成你的 frp token&quot;
+
+[[proxies]]
+name = &quot;autosync-msfp&quot;
+type = &quot;tcp&quot;
+localIP = &quot;127.0.0.1&quot;
+localPort = 8123
+remotePort = 8123
+</code></pre>
+<p>前台试跑：</p>
+<pre><code class="language-powershell">.\frpc.exe -c .\frpc.toml
+</code></pre>
+<p>能通就把它做成自启（见下面 NSSM 一节，<code>frpc.exe</code> 同样适合用 NSSM 托管）。</p>
+<hr />
+<h2 id="8">8. 开机自启</h2>
+<p>两种方式任选其一。<strong>方式 A 不用装任何软件，推荐先试它。</strong></p>
+<h3 id="atask-scheduler">方式 A：任务计划程序（Task Scheduler）</h3>
+<p>思路：开机时用 <code>python.exe</code> 启动 <code>-m autosync --base . serve</code>，工作目录设成 <code>server</code> 目录。</p>
+<p><strong>A-1. 先写一个启动脚本</strong>（把路径换成你的实际路径）：</p>
+<pre><code class="language-powershell">New-Item -ItemType Directory -Force -Path C:\AutoSync | Out-Null
+@'
+@echo off
+chcp 65001 &gt;nul
+cd /d C:\AutoSync\repo\server
+set NO_COLOR=1
+set PYTHONUNBUFFERED=1
+&quot;C:\Users\你的用户名\AppData\Local\Programs\Python\Python312\python.exe&quot; -m autosync --base . serve &gt;&gt; C:\AutoSync\autosync.log 2&gt;&amp;1
+'@ | Set-Content -Encoding ASCII C:\AutoSync\start-autosync.bat
+</code></pre>
+<blockquote>
+<p>把里面的 Python 路径换成 <code>where python</code> 输出的真实路径。</p>
+</blockquote>
+<p><strong>A-2. 注册计划任务</strong>（管理员 PowerShell，一次性）：</p>
+<pre><code class="language-powershell">$action  = New-ScheduledTaskAction -Execute &quot;C:\AutoSync\start-autosync.bat&quot;
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+    -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
+    -ExecutionTimeLimit (New-TimeSpan -Days 0)
+$principal = New-ScheduledTaskPrincipal -UserId &quot;SYSTEM&quot; -LogonType ServiceAccount -RunLevel Highest
+
+Register-ScheduledTask -TaskName &quot;AutoSync&quot; -Action $action -Trigger $trigger `
+    -Settings $settings -Principal $principal -Description &quot;AutoSync MSFP mod distribution server&quot;
+</code></pre>
+<blockquote>
+<p><code>-ExecutionTimeLimit (New-TimeSpan -Days 0)</code> 表示<strong>不限制运行时长</strong>（默认为 3 天后强杀），长跑服务必须设。</p>
+</blockquote>
+<p><strong>A-3. 验证与常用操作</strong>：</p>
+<pre><code class="language-powershell">Start-ScheduledTask -TaskName &quot;AutoSync&quot;                 # 立即启动一次
+Get-ScheduledTask -TaskName &quot;AutoSync&quot; | Format-List State, TaskName
+Get-ScheduledTaskInfo -TaskName &quot;AutoSync&quot; | Format-List LastRunTime, LastTaskResult
+Stop-ScheduledTask -TaskName &quot;AutoSync&quot;                  # 停止
+Unregister-ScheduledTask -TaskName &quot;AutoSync&quot; -Confirm:$false   # 删除
+Get-Content C:\AutoSync\autosync.log -Tail 30 -Encoding UTF8    # 看日志
+</code></pre>
+<p><strong>方式 A 的注意点</strong>：</p>
+<ul>
+<li>用 <code>SYSTEM</code> 身份运行时，<code>C:\AutoSync\repo\server</code> 必须有读权限（一般没问题）；</li>
+<li>日志重定向到 <code>C:\AutoSync\autosync.log</code>，排查问题先看它；</li>
+<li>改了 <code>config.json</code> 后要 <code>Stop-ScheduledTask</code> + <code>Start-ScheduledTask</code> 重启。</li>
+</ul>
+<h3 id="bnssm-windows">方式 B：NSSM（把程序注册成 Windows 服务）</h3>
+<p>NSSM 能提供标准的服务管理（自动重启、崩溃拉起、<code>services.msc</code> 里可见）。</p>
+<p><strong>B-1. 下载 NSSM</strong></p>
+<p>打开 <a href="https://nssm.cc/download">https://nssm.cc/download</a>，下载 <code>nssm-2.24.zip</code>，解压后把 <code>win64\nssm.exe</code> 放到 <code>C:\AutoSync\nssm.exe</code>（或任意目录）。</p>
+<p><strong>B-2. 安装服务</strong>（管理员 PowerShell）：</p>
+<pre><code class="language-powershell"># 注意：NSSM 的 Application 必须填 python.exe，参数分开写
+$python = (Get-Command python).Source
+Write-Host &quot;python: $python&quot;
+
+C:\AutoSync\nssm.exe install AutoSync &quot;$python&quot;
+C:\AutoSync\nssm.exe set AutoSync AppParameters &quot;-m autosync --base . serve&quot;
+C:\AutoSync\nssm.exe set AutoSync AppDirectory &quot;C:\AutoSync\repo\server&quot;
+C:\AutoSync\nssm.exe set AutoSync DisplayName &quot;AutoSync MSFP server&quot;
+C:\AutoSync\nssm.exe set AutoSync Description &quot;AutoSync client mod distribution (MSFP raw TCP)&quot;
+C:\AutoSync\nssm.exe set AutoSync Start SERVICE_AUTO_START
+C:\AutoSync\nssm.exe set AutoSync AppStdout &quot;C:\AutoSync\autosync.out.log&quot;
+C:\AutoSync\nssm.exe set AutoSync AppStderr &quot;C:\AutoSync\autosync.err.log&quot;
+C:\AutoSync\nssm.exe set AutoSync AppRotateFiles 1
+C:\AutoSync\nssm.exe set AutoSync AppRotateBytes 10485760
+C:\AutoSync\nssm.exe set AutoSync AppEnvironmentExtra NO_COLOR=1 PYTHONUNBUFFERED=1
+C:\AutoSync\nssm.exe set AutoSync AppExit Default Restart
+C:\AutoSync\nssm.exe set AutoSync AppRestartDelay 5000
+</code></pre>
+<p><strong>B-3. 启动与验证</strong>：</p>
+<pre><code class="language-powershell">Start-Service AutoSync
+Get-Service AutoSync | Format-List Name, Status, StartType
+Get-Content C:\AutoSync\autosync.out.log -Tail 20 -Encoding UTF8
+</code></pre>
+<p>常用操作：</p>
+<pre><code class="language-powershell">Restart-Service AutoSync     # 改了 config.json 后重启
+Stop-Service AutoSync
+C:\AutoSync\nssm.exe remove AutoSync confirm    # 卸载服务
+</code></pre>
+<hr />
+<h2 id="9">9. 日常更新模组</h2>
+<p>双击仓库里的 <code>tools\upload.bat</code>（增量，会删除服务器上多余的 jar）或 <code>tools\upload-full.bat</code>（全量，有二次确认）。</p>
+<p>第一次用之前，用<strong>系统环境变量</strong>或同目录的 <code>set</code> 命令配好：</p>
+<pre><code class="language-cmd">set AUTOSYNC_HOST=198.51.100.10
+set AUTOSYNC_PORT=22
+set AUTOSYNC_USER=ubuntu
+set AUTOSYNC_KEY=C:\Users\你的用户名\.ssh\id_ed25519
+set AUTOSYNC_MODS=C:\AutoSync\repo\mods
+set AUTOSYNC_ROOT=/opt/autosync/repo/server
+set AUTOSYNC_PYTHON=python3
+</code></pre>
+<p>也可以直接命令行调用，先用 <code>--dry-run</code> 看会传什么：</p>
+<pre><code class="language-powershell">python tools\deploy.py --dry-run --host 198.51.100.10 --user ubuntu --mods C:\AutoSync\repo\mods
+</code></pre>
+<p>需要先 <code>pip install paramiko</code>。<code>deploy.py</code> 里<strong>不存任何服务器地址或密码</strong>。</p>
+<hr />
+<h2 id="10-windows">10. 常见坑（Windows 特有）</h2>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>python</code> 打开微软商店</td>
+<td>应用执行别名没关</td>
+<td>设置 → 应用 → 高级应用设置 → 应用执行别名，关掉 <code>python.exe</code> / <code>python3.exe</code></td>
+</tr>
+<tr>
+<td>中文日志乱码</td>
+<td>控制台代码页不是 UTF-8</td>
+<td><code>chcp 65001</code>；或设 <code>$env:PYTHONIOENCODING="utf-8"</code></td>
+</tr>
+<tr>
+<td>计划任务启动后立刻退出</td>
+<td>脚本里 Python 路径写错 / 工作目录不对</td>
+<td>先手动双击 <code>start-autosync.bat</code> 看报错，看 <code>autosync.log</code></td>
+</tr>
+<tr>
+<td>计划任务跑 3 天后被杀</td>
+<td>默认 <code>ExecutionTimeLimit</code> 是 3 天</td>
+<td>注册时加 <code>-ExecutionTimeLimit (New-TimeSpan -Days 0)</code></td>
+</tr>
+<tr>
+<td>外网连不上，本机 <code>Test-NetConnection</code> 通</td>
+<td>云安全组没放行</td>
+<td>控制台安全组放行 <code>remotePort</code></td>
+</tr>
+<tr>
+<td><code>build</code> 报"分发目录为空"</td>
+<td><code>dist_dir</code> 配错（这是保护机制）</td>
+<td>检查 <code>config.json</code> 与工作目录，不要急着开 <code>allow_empty_dist</code></td>
+</tr>
+<tr>
+<td>端口被占用</td>
+<td>8123 被别的程序占了</td>
+<td><code>Get-NetTCPConnection -LocalPort 8123</code> 找到进程，改 <code>tcp_port</code> 或停掉占用者</td>
+</tr>
+<tr>
+<td>杀软误报 / 拦截</td>
+<td>服务监听端口触发行为告警</td>
+<td>给 <code>python.exe</code> 与 <code>C:\AutoSync</code> 加白名单</td>
+</tr>
+<tr>
+<td>路径含中文导致异常</td>
+<td>少见的编码问题</td>
+<td>部署路径统一用纯 ASCII（如 <code>C:\AutoSync</code>）</td>
+</tr>
+</tbody>
+</table>
+    </article>
+    <div class="pager"><a href="deploy-linux.html"><span class="l">上一篇</span><span class="t">← Linux 部署</span></a>
+      <a class="nx" href="client-config.html"><span class="l">下一篇</span><span class="t">客户端配置 →</span></a></div>
+  </main>
+</div>
+
+<footer>
+  <a href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub</a> ·
+  <a href="https://github.com/szkele1145/AutoSync/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a> ·
+  基于 <a href="https://github.com/BalloonUpdate/McPatch2" target="_blank" rel="noopener">McPatch2</a> 改造 ·
+  本项目由 <b style="color:var(--purple)">DeepSeek-V4.1-Flash</b> 辅助制作
+</footer>
+</body>
+</html>

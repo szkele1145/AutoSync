@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>服务端 · Python 版 — AutoSync 文档</title>
+<meta name="description" content="独立版安装与完整命令表">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e14;--panel:#10151f;--panel2:#141b26;--line:#1e2733;
+  --txt:#dfe6f0;--dim:#78839a;--dim2:#57606f;
+  --cyan:#56b6c2;--green:#98c379;--yellow:#e5c07b;--red:#e06c75;
+  --purple:#c678dd;--blue:#61afef;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);line-height:1.8;
+  font-family:"Cascadia Code","JetBrains Mono",Consolas,"Microsoft YaHei",-apple-system,sans-serif;
+  font-size:15px;-webkit-font-smoothing:antialiased}
+#bg{position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -8%,rgba(86,182,194,.12),transparent 62%),
+    radial-gradient(ellipse 50% 40% at 88% 106%,rgba(198,120,221,.09),transparent 60%),
+    var(--bg)}
+#grid{position:fixed;inset:-60%;z-index:-1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(86,182,194,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(86,182,194,.045) 1px,transparent 1px);
+  background-size:52px 52px;
+  transform:perspective(680px) rotateX(60deg);
+  mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%);
+  -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%)}
+
+header{position:sticky;top:0;z-index:50;backdrop-filter:blur(11px);
+  background:rgba(10,14,20,.86);border-bottom:1px solid var(--line)}
+.nav{max-width:1240px;margin:0 auto;padding:0 22px;display:flex;align-items:center;gap:22px;height:58px}
+.brand{font-weight:800;font-size:18px;text-decoration:none;
+  background:linear-gradient(100deg,var(--cyan),var(--blue) 45%,var(--purple) 82%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.nav a.lnk{color:var(--dim);text-decoration:none;font-size:13.5px}
+.nav a.lnk:hover{color:var(--cyan)}
+.nav .sp{flex:1}
+.nav a.gh{border:1px solid var(--line);padding:5px 13px;border-radius:7px;color:var(--txt);
+  text-decoration:none;font-size:13px}
+.nav a.gh:hover{border-color:var(--cyan);color:var(--cyan)}
+
+.layout{max-width:1240px;margin:0 auto;padding:30px 22px 70px;display:grid;
+  grid-template-columns:238px 1fr;gap:34px;align-items:start}
+aside{position:sticky;top:80px;background:var(--panel);border:1px solid var(--line);
+  border-radius:11px;padding:15px;max-height:calc(100vh - 110px);overflow:auto}
+aside .hd{font-size:11.5px;letter-spacing:.1em;color:var(--dim2);margin-bottom:11px}
+aside a{display:flex;gap:9px;padding:8px 10px;border-radius:7px;color:var(--dim);
+  text-decoration:none;font-size:13.5px;transition:.16s;margin-bottom:2px}
+aside a:hover{background:var(--panel2);color:var(--txt)}
+aside a.on{background:rgba(86,182,194,.11);color:var(--cyan);font-weight:600}
+aside a .ic{flex:none}
+
+main{min-width:0}
+.crumb{font-size:12.5px;color:var(--dim2);margin-bottom:16px}
+.crumb a{color:var(--dim);text-decoration:none}
+.crumb a:hover{color:var(--cyan)}
+
+article{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:clamp(22px,3.4vw,42px);overflow-wrap:break-word}
+article h1{font-size:clamp(25px,3.6vw,36px);font-weight:800;margin-bottom:8px;line-height:1.3}
+article h1::after{content:'';display:block;width:50px;height:3px;margin-top:15px;border-radius:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--purple))}
+article h2{font-size:clamp(19px,2.5vw,25px);font-weight:700;margin:38px 0 13px;
+  padding-top:19px;border-top:1px solid var(--line)}
+article h3{font-size:17.5px;font-weight:700;margin:26px 0 10px;color:var(--cyan)}
+article h4{font-size:15.5px;font-weight:700;margin:20px 0 8px;color:#b9c3d1}
+article p{margin:12px 0;color:#c6cedb}
+article a{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(86,182,194,.3)}
+article a:hover{border-bottom-color:var(--cyan)}
+article ul,article ol{margin:12px 0 12px 24px;color:#c6cedb}
+article li{margin:6px 0}
+article li::marker{color:var(--dim)}
+article strong{color:#eaf0f8;font-weight:700}
+article em{color:var(--yellow);font-style:normal}
+article hr{border:none;border-top:1px solid var(--line);margin:30px 0}
+article blockquote{border-left:3px solid var(--cyan);background:rgba(86,182,194,.05);
+  padding:11px 17px;border-radius:0 8px 8px 0;margin:16px 0;color:#aab4c2}
+article blockquote p{margin:5px 0;color:#aab4c2}
+
+article code{background:#0c1119;border:1px solid var(--line);border-radius:5px;
+  padding:2px 6px;font-size:13px;color:var(--yellow);font-family:inherit}
+article pre{background:#0c1119;border:1px solid var(--line);border-radius:9px;
+  padding:15px 18px;overflow-x:auto;margin:15px 0;font-size:13px;line-height:1.85}
+article pre code{background:none;border:none;padding:0;color:#c3cbd8;font-size:13px;
+  white-space:pre;display:block}
+
+article table{width:100%;border-collapse:collapse;margin:17px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+article th,article td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);
+  white-space:nowrap}
+article th{color:var(--dim);font-weight:600;font-size:12.5px;letter-spacing:.04em;
+  background:rgba(86,182,194,.035)}
+article td{color:#c2cad6}
+article tr:hover td{background:rgba(86,182,194,.03)}
+
+.pager{display:flex;justify-content:space-between;gap:13px;margin-top:24px;flex-wrap:wrap}
+.pager a{flex:1;min-width:180px;padding:13px 17px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel);text-decoration:none;transition:.2s}
+.pager a:hover{border-color:rgba(86,182,194,.45);background:var(--panel2)}
+.pager a .l{font-size:11.5px;color:var(--dim2);display:block;margin-bottom:3px}
+.pager a .t{font-size:14px;color:var(--txt);font-weight:600}
+.pager a.nx{text-align:right}
+
+footer{max-width:1240px;margin:0 auto;padding:30px 22px 50px;text-align:center;
+  color:var(--dim2);font-size:12.5px;border-top:1px solid var(--line)}
+footer a{color:var(--dim);text-decoration:none}
+footer a:hover{color:var(--cyan)}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr;gap:20px}
+  aside{position:static;max-height:none}
+  aside .list{display:flex;flex-wrap:wrap;gap:5px}
+  aside a{margin:0}
+}
+</style>
+</head>
+<body>
+<div id="bg"></div><div id="grid"></div>
+
+<header>
+  <div class="nav">
+    <a class="brand" href="index.html">AutoSync</a>
+    <a class="lnk" href="index.html">首页</a>
+    <a class="lnk" href="https://szkele1145.github.io/AutoSync/compare.html">改进对比</a>
+    <span class="sp"></span>
+    <a class="gh" href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="hd">文档</div>
+    <div class="list"><a href="index.html"><span class="ic">🏠</span>首页</a>
+      <a href="compare.html"><span class="ic">⚖️</span>相比原版的改进</a>
+      <a href="deploy-linux.html"><span class="ic">🐧</span>Linux 部署</a>
+      <a href="deploy-windows.html"><span class="ic">🪟</span>Windows 部署</a>
+      <a href="client-config.html"><span class="ic">⚙️</span>客户端配置</a>
+      <a href="server-python.html" class="on"><span class="ic">🐍</span>服务端 · Python 版</a>
+      <a href="server-mcdr.html"><span class="ic">🧩</span>服务端 · MCDR 版</a>
+      <a href="faq.html"><span class="ic">❓</span>常见问题</a>
+      <a href="msfp.html"><span class="ic">📡</span>MSFP 协议</a></div>
+  </aside>
+  <main>
+    <div class="crumb"><a href="index.html">首页</a> / 文档 / 服务端 · Python 版</div>
+    <article>
+<h1 id="python">服务端 · 独立 Python 版</h1>
+<p><code>server/python/</code> 是<strong>独立运行</strong>的服务端：<strong>纯 Python 标准库</strong>，不依赖 MCDR、不依赖 Minecraft 服务端进程，可以单独跑在一台机器上。</p>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>版本</td>
+<td><code>1.0.0</code></td>
+</tr>
+<tr>
+<td>运行环境</td>
+<td>Python <strong>3.11+</strong>（在 3.12 / 3.14 上实测通过）</td>
+</tr>
+<tr>
+<td>第三方依赖</td>
+<td><strong>无</strong>（<code>requirements.txt</code> 里只有说明）</td>
+</tr>
+<tr>
+<td>支持系统</td>
+<td>Linux（推荐 Ubuntu 24.04）/ Windows 10+</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1">1. 目录结构</h2>
+<pre><code>server/python/
+├── autosync/                程序本体（包名不能改）
+│   ├── __init__.py          版本号
+│   ├── __main__.py          命令行入口
+│   ├── config.py            配置对象与默认值
+│   ├── scanner.py           目录扫描 + SHA-256 / SHA-1
+│   ├── manifest.py          清单结构 / 内容指纹 / 原子写入
+│   ├── modrinth.py          Modrinth API 查询
+│   ├── curseforge.py        CurseForge 官方 API / CFWidget
+│   ├── speedtest.py         512KB 测速文件生成
+│   ├── tcp_server.py        MSFP v1 服务端
+│   ├── tcp_client.py        MSFP v1 客户端（自检用）
+│   ├── builder.py           构建编排 / 状态缓存 / 定时轮询
+│   ├── theme.py             QBM 风格输出主题
+│   ├── classify.py          模组分类与搬运
+│   ├── deps.py              依赖检查（含 JiJ 嵌套层）
+│   ├── deps_fix.py          缺失前置自动下载
+│   └── shell.py             交互式 REPL
+├── config.example.json      配置模板（含全部键与注释）
+└── requirements.txt         空依赖说明
+</code></pre>
+<hr />
+<h2 id="2">2. 安装</h2>
+<pre><code class="language-bash"># 1. 拿到代码（或直接把整个 Autosync 目录复制过去）
+cd /opt &amp;&amp; git clone &lt;你的仓库地址&gt; autosync
+cd /opt/autosync/server/python
+
+# 2. 验证
+python3 -m autosync --version
+# 期望：AutoSync 1.0.0
+</code></pre>
+<p>不需要 <code>pip install</code> 任何东西。</p>
+<blockquote>
+<p>详细的系统级部署（systemd / frp / 防火墙）见 <a href="部署-Linux.md">部署-Linux.md</a> 与 <a href="部署-Windows.md">部署-Windows.md</a>。</p>
+</blockquote>
+<hr />
+<h2 id="3">3. 配置</h2>
+<p>配置文件默认是<strong>当前工作目录</strong>下的 <code>config.json</code>；<strong>不存在时会自动生成一份默认配置</strong>（含全部键与中文注释）。也可以用 <code>--config &lt;路径&gt;</code> 指定别处。</p>
+<pre><code class="language-bash">cd /opt/autosync/server/python
+python3 -m autosync --base .. status     # 第一次运行顺手生成 config.json
+</code></pre>
+<p>生成后编辑 <code>config.json</code>，最常改的几个：</p>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>默认值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dist_dir</code></td>
+<td><code>client-dist</code></td>
+<td>要分发给客户端的目录</td>
+</tr>
+<tr>
+<td><code>base_dir</code></td>
+<td><code>""</code></td>
+<td><code>dist_dir</code> 的基准；空 = 当前工作目录（systemd 里由 <code>WorkingDirectory</code> 决定）</td>
+</tr>
+<tr>
+<td><code>tcp_host</code> / <code>tcp_port</code></td>
+<td><code>0.0.0.0</code> / <code>8123</code></td>
+<td>MSFP 监听地址与端口</td>
+</tr>
+<tr>
+<td><code>tcp_enabled</code></td>
+<td><code>true</code></td>
+<td>是否启用分发服务</td>
+</tr>
+<tr>
+<td><code>speedtest_enabled</code> / <code>speedtest_size</code></td>
+<td><code>true</code> / <code>524288</code></td>
+<td>客户端多源测速用的 512KB 文件</td>
+</tr>
+<tr>
+<td><code>poll_interval_seconds</code></td>
+<td><code>0</code></td>
+<td>定时检测重建（秒），0 = 关闭</td>
+</tr>
+<tr>
+<td><code>auto_build_on_start</code></td>
+<td><code>false</code></td>
+<td>启动时自动构建一次</td>
+</tr>
+<tr>
+<td><code>allow_empty_dist</code></td>
+<td><code>false</code></td>
+<td>目录为空时是否仍生成空清单；<strong>保持 false</strong> 防止误清空客户端</td>
+</tr>
+<tr>
+<td><code>classify_server_mods_dir</code></td>
+<td><code>../mods</code></td>
+<td>服务端 mods 目录（相对 <code>dist_dir</code>）</td>
+</tr>
+<tr>
+<td><code>deps_fix_game_version</code> / <code>deps_fix_loader</code></td>
+<td><code>1.21.1</code> / <code>neoforge</code></td>
+<td>自动补前置时筛版本</td>
+</tr>
+<tr>
+<td><code>curseforge_api_key</code></td>
+<td><code>""</code></td>
+<td>留空则用免 key 的 CFWidget 兜底</td>
+</tr>
+<tr>
+<td><code>http_proxy</code></td>
+<td><code>""</code></td>
+<td>出站 HTTP 代理（<code>http://host:port</code>）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>完整键列表与逐项注释</strong>见 <code>config.example.json</code>。</p>
+<hr />
+<h2 id="4">4. 完整命令表</h2>
+<p><code>--base &lt;目录&gt;</code> 指定 <code>dist_dir</code> 相对路径的基准目录；不写就按配置里的 <code>base_dir</code> 解析，再退回当前目录。</p>
+<h3 id="41">4.1 常用动作</h3>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>python3 -m autosync --base &lt;目录&gt; shell</code></td>
+<td><strong>交互式 REPL</strong>（推荐）：启动即拉起 MSFP，然后进 <code>AutoSync&gt;</code> 提示符</td>
+</tr>
+<tr>
+<td><code>python3 -m autosync --base &lt;目录&gt; serve</code></td>
+<td>只跑 MSFP 服务（常驻，<code>Ctrl+C</code> 退出）</td>
+</tr>
+<tr>
+<td><code>python3 -m autosync --base &lt;目录&gt; build</code></td>
+<td>只构建清单后退出</td>
+</tr>
+<tr>
+<td><code>python3 -m autosync --base &lt;目录&gt; status</code></td>
+<td>查看文件数 / 清单版本 / 端口与连接统计</td>
+</tr>
+<tr>
+<td><code>python3 -m autosync --base &lt;目录&gt; check</code></td>
+<td><strong>协议自检</strong>：临时起服务，跑 PING / SIZE / GET / 分块 / 并发 / 错误码</td>
+</tr>
+<tr>
+<td><code>python3 -m autosync --version</code></td>
+<td>打印版本号</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42">4.2 模组分类</h3>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>... classify [--refresh]</code></td>
+<td><strong>干跑</strong>：分析 <code>client-dist/mods</code> 里哪些是纯客户端 / 双端 / 纯服务端 / 待定，<strong>不改动任何文件</strong></td>
+</tr>
+<tr>
+<td><code>... classify-apply</code></td>
+<td>按上一次 classify 的结果搬运（双端复制；纯服务端默认也只复制）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43">4.3 依赖检查与自动补前置</h3>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>... deps</code></td>
+<td><strong>只读</strong>：扫描 jar 元数据（含 JiJ 嵌套层），列出真缺失前置 / JiJ 已提供 / 无法解析 + 循环依赖 + 版本不匹配</td>
+</tr>
+<tr>
+<td><code>... deps-fix</code></td>
+<td>列出缺失前置的<strong>编号清单与候选版本</strong>（a/b/c），不下载任何文件</td>
+</tr>
+<tr>
+<td><code>... deps-fix 1a 2a</code></td>
+<td>只下载编号 <code>1a</code>、<code>2a</code> 这两项</td>
+</tr>
+<tr>
+<td><code>... deps-fix apply</code></td>
+<td>全选推荐候选（每项取 a；只有预发布版时取 b/c）并真正下载到 <code>&lt;dist_dir&gt;/mods/</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>下载源策略：<strong>Modrinth 优先</strong>；定位失败时兜底 CurseForge（配置了 <code>curseforge_api_key</code> 就走官方 API，否则用免 key 的第三方源 CFWidget）。<br />
+会做哈希校验；<strong>同名不同内容绝不覆盖</strong>；清单缓存 30 分钟，过期请重新运行 <code>deps-fix</code>。</p>
+</blockquote>
+<h3 id="44">4.4 全局参数</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--base &lt;目录&gt;</code></td>
+<td><code>dist_dir</code> 相对路径的基准目录</td>
+</tr>
+<tr>
+<td><code>--data &lt;目录&gt;</code></td>
+<td>状态 / 缓存目录（默认 <code>./autosync-data</code>）</td>
+</tr>
+<tr>
+<td><code>--config &lt;路径&gt;</code></td>
+<td>JSON 配置文件路径（默认 <code>./config.json</code>，不存在则自动生成）</td>
+</tr>
+<tr>
+<td><code>--dist &lt;目录&gt;</code></td>
+<td>覆盖配置里的 <code>dist_dir</code></td>
+</tr>
+<tr>
+<td><code>--port &lt;端口&gt;</code></td>
+<td>覆盖配置里的 <code>tcp_port</code>（<code>check</code> 默认 <code>0</code> = 随机端口）</td>
+</tr>
+<tr>
+<td><code>--connections &lt;N&gt;</code></td>
+<td><code>check</code> 的并发连接数（默认 8）</td>
+</tr>
+<tr>
+<td><code>--refresh</code></td>
+<td>忽略 Modrinth 缓存强制重查</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>以 JSON 输出结果（便于脚本处理）</td>
+</tr>
+<tr>
+<td><code>--quiet</code></td>
+<td>只输出错误日志</td>
+</tr>
+</tbody>
+</table>
+<h3 id="45-shell">4.5 交互式 shell 的内部命令</h3>
+<p>进入 <code>shell</code> 后，命令<strong>不带前缀</strong>：</p>
+<pre><code>status                 查看文件数 / 清单版本 / MSFP 端口与连接统计
+build                  重建客户端清单与测速文件
+build refresh          忽略 Modrinth 缓存强制重查后重建
+reload                 重载 config.json 并重启 MSFP 服务与定时轮询
+tcp start|stop|restart 控制 MSFP（裸 TCP）分发服务
+classify               干跑分类（只读）
+classify apply         按上次结果搬运
+deps                   只读依赖检查
+deps fix               列出缺失前置编号清单（不下载）
+deps fix 1a 2a         只下载指定编号
+deps fix apply         全选推荐候选并下载
+help                   查看全部命令
+exit | quit            退出（MSFP 服务一起停掉）
+</code></pre>
+<hr />
+<h2 id="5">5. 典型工作流</h2>
+<pre><code class="language-bash"># ---- 一次性准备 ----
+cd /opt/autosync/server
+mkdir -p client-dist/mods
+# 把要发的 mod 放进 client-dist/mods（或从 mods/ 建硬链接）
+python3 -m autosync --base . build          # 生成 manifest.json + speedtest.bin
+python3 -m autosync --base . check          # 确认协议与文件都对
+
+# ---- 常驻运行 ----
+python3 -m autosync --base . serve          # 或用 shell 进交互模式
+
+# ---- 日常改模组 ----
+# 在本地用 tools/deploy.py 上传 -&gt; 远端自动 build
+python3 tools/deploy.py --host &lt;服务器地址&gt; --user &lt;用户&gt; --mods &lt;本地mods&gt;
+
+# ---- 手工检查依赖 ----
+python3 -m autosync --base . deps           # 看有没有缺前置
+python3 -m autosync --base . deps-fix       # 看候选版本
+python3 -m autosync --base . deps-fix apply # 一键补齐
+</code></pre>
+<hr />
+<h2 id="6">6. 产出物</h2>
+<table>
+<thead>
+<tr>
+<th>路径</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;dist_dir&gt;/manifest.json</code></td>
+<td>客户端要拉取的清单（含每个文件的 path / size / sha256 / urls）</td>
+</tr>
+<tr>
+<td><code>&lt;dist_dir&gt;/speedtest.bin</code></td>
+<td>512KB 测速文件，客户端多源测速用</td>
+</tr>
+<tr>
+<td><code>./autosync-data/state.json</code></td>
+<td>上一次构建的文件快照、Modrinth 查询缓存等</td>
+</tr>
+<tr>
+<td><code>./autosync-data/*.json</code></td>
+<td><code>deps</code> / <code>classify</code> 等命令的 JSON 报告</td>
+</tr>
+<tr>
+<td><code>./config.json</code></td>
+<td>配置文件（首次运行自动生成）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>不要</strong>把这些提交进 git：<code>autosync-data/</code>、<code>config.json</code>、<code>client-dist/</code>（<code>.gitignore</code> 里已经排除）。</p>
+<hr />
+<h2 id="7-mcdr">7. 与 MCDR 版的差异</h2>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>独立 Python 版</th>
+<th><a href="服务端-MCDR版.md">MCDR 版</a></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>依赖</td>
+<td>只要 Python 3.11+</td>
+<td>需要 MCDR 2.10+</td>
+</tr>
+<tr>
+<td>操作方式</td>
+<td>命令行 / 交互式 shell</td>
+<td>游戏内 <code>!!autosync</code> 命令</td>
+</tr>
+<tr>
+<td>配置文件位置</td>
+<td>工作目录下的 <code>config.json</code></td>
+<td><code>config/autosync/config.json</code></td>
+</tr>
+<tr>
+<td>数据目录</td>
+<td>工作目录下的 <code>autosync-data/</code></td>
+<td><code>config/autosync/autosync-data/</code></td>
+</tr>
+<tr>
+<td><code>base_dir</code> 为空时</td>
+<td>取<strong>当前工作目录</strong></td>
+<td>取 MCDR 的 <code>working_directory</code>（一般是 <code>server/</code>）</td>
+</tr>
+<tr>
+<td>核心业务代码</td>
+<td><code>autosync/</code> 本体</td>
+<td>同一份代码的副本（<code>autosync/core/</code>）</td>
+</tr>
+<tr>
+<td>命令名</td>
+<td><code>build</code> / <code>classify-apply</code> / <code>deps-fix</code></td>
+<td><code>!!autosync build</code> / <code>classify apply</code> / <code>deps fix</code></td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>独立部署、无 MCDR、给其它机器分发</td>
+<td>已经在用 MCDR 管服的场景</td>
+</tr>
+</tbody>
+</table>
+<p>两边<strong>读写的清单格式、MSFP 协议、配置键完全一致</strong>，可以随时互换。</p>
+    </article>
+    <div class="pager"><a href="client-config.html"><span class="l">上一篇</span><span class="t">← 客户端配置</span></a>
+      <a class="nx" href="server-mcdr.html"><span class="l">下一篇</span><span class="t">服务端 · MCDR 版 →</span></a></div>
+  </main>
+</div>
+
+<footer>
+  <a href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub</a> ·
+  <a href="https://github.com/szkele1145/AutoSync/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a> ·
+  基于 <a href="https://github.com/BalloonUpdate/McPatch2" target="_blank" rel="noopener">McPatch2</a> 改造 ·
+  本项目由 <b style="color:var(--purple)">DeepSeek-V4.1-Flash</b> 辅助制作
+</footer>
+</body>
+</html>

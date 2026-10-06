@@ -330,19 +330,19 @@ mcpatch.yml
 
 <script>
 /* 文档索引（本地渲染，避免手写一大堆 <a>） */
-const REPO = 'https://github.com/szkele1145/AutoSync/blob/main/docs/';
+
 const DOCS = [
-  ['⚖️','相比原版的改进','逐条对比 McPatch2 的改动、痛点与实测数据 —— 想快速了解做了什么，先看这篇','相比原版的改进.md'],
-  ['🐧','Linux 部署','Ubuntu 24 从零部署：Python 环境、systemd 开机自启、frp 端口转发','部署-Linux.md'],
-  ['🪟','Windows 部署','Windows 上跑服务端：安装、防火墙、任务计划程序 / NSSM 自启','部署-Windows.md'],
-  ['⚙️','客户端配置','mcpatch.yml 每个键的含义、默认值与建议值','客户端配置.md'],
-  ['🐍','服务端 · Python 版','独立版安装步骤与完整命令表','服务端-Python版.md'],
-  ['🧩','服务端 · MCDR 版','MCDR 插件安装、命令表、权限与独立版的差异','服务端-MCDR版.md'],
-  ['❓','常见问题','连不上、缺前置崩溃、下载慢、mod 被清、误删恢复','常见问题.md'],
-  ['📡','MSFP 协议','MSFP v1 协议规范（给二次开发者）','MSFP协议.md'],
+  ['⚖️','相比原版的改进','逐条对比 McPatch2 的改动、痛点与实测数据 —— 想快速了解做了什么，先看这篇','compare.html'],
+  ['🐧','Linux 部署','Ubuntu 24 从零部署：Python 环境、systemd 开机自启、frp 端口转发','deploy-linux.html'],
+  ['🪟','Windows 部署','Windows 上跑服务端：安装、防火墙、任务计划程序 / NSSM 自启','deploy-windows.html'],
+  ['⚙️','客户端配置','mcpatch.yml 每个键的含义、默认值与建议值','client-config.html'],
+  ['🐍','服务端 · Python 版','独立版安装步骤与完整命令表','server-python.html'],
+  ['🧩','服务端 · MCDR 版','MCDR 插件安装、命令表、权限与独立版的差异','server-mcdr.html'],
+  ['❓','常见问题','连不上、缺前置崩溃、下载慢、mod 被清、误删恢复','faq.html'],
+  ['📡','MSFP 协议','MSFP v1 协议规范（给二次开发者）','msfp.html'],
 ];
 document.getElementById('docList').innerHTML = DOCS.map(([ic,t,d,f]) => `
-  <a class="doc" href="${REPO}${encodeURIComponent(f)}" target="_blank" rel="noopener">
+  <a class="doc" href="${f}">
     <span class="ic">${ic}</span>
     <span><span class="t">${t}</span><span class="d">${d}</span></span>
   </a>`).join('');

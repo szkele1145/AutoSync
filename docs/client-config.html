@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>客户端配置 — AutoSync 文档</title>
+<meta name="description" content="mcpatch.yml 每个键的含义与建议值">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e14;--panel:#10151f;--panel2:#141b26;--line:#1e2733;
+  --txt:#dfe6f0;--dim:#78839a;--dim2:#57606f;
+  --cyan:#56b6c2;--green:#98c379;--yellow:#e5c07b;--red:#e06c75;
+  --purple:#c678dd;--blue:#61afef;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);line-height:1.8;
+  font-family:"Cascadia Code","JetBrains Mono",Consolas,"Microsoft YaHei",-apple-system,sans-serif;
+  font-size:15px;-webkit-font-smoothing:antialiased}
+#bg{position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -8%,rgba(86,182,194,.12),transparent 62%),
+    radial-gradient(ellipse 50% 40% at 88% 106%,rgba(198,120,221,.09),transparent 60%),
+    var(--bg)}
+#grid{position:fixed;inset:-60%;z-index:-1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(86,182,194,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(86,182,194,.045) 1px,transparent 1px);
+  background-size:52px 52px;
+  transform:perspective(680px) rotateX(60deg);
+  mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%);
+  -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 26%,#000 10%,transparent 70%)}
+
+header{position:sticky;top:0;z-index:50;backdrop-filter:blur(11px);
+  background:rgba(10,14,20,.86);border-bottom:1px solid var(--line)}
+.nav{max-width:1240px;margin:0 auto;padding:0 22px;display:flex;align-items:center;gap:22px;height:58px}
+.brand{font-weight:800;font-size:18px;text-decoration:none;
+  background:linear-gradient(100deg,var(--cyan),var(--blue) 45%,var(--purple) 82%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.nav a.lnk{color:var(--dim);text-decoration:none;font-size:13.5px}
+.nav a.lnk:hover{color:var(--cyan)}
+.nav .sp{flex:1}
+.nav a.gh{border:1px solid var(--line);padding:5px 13px;border-radius:7px;color:var(--txt);
+  text-decoration:none;font-size:13px}
+.nav a.gh:hover{border-color:var(--cyan);color:var(--cyan)}
+
+.layout{max-width:1240px;margin:0 auto;padding:30px 22px 70px;display:grid;
+  grid-template-columns:238px 1fr;gap:34px;align-items:start}
+aside{position:sticky;top:80px;background:var(--panel);border:1px solid var(--line);
+  border-radius:11px;padding:15px;max-height:calc(100vh - 110px);overflow:auto}
+aside .hd{font-size:11.5px;letter-spacing:.1em;color:var(--dim2);margin-bottom:11px}
+aside a{display:flex;gap:9px;padding:8px 10px;border-radius:7px;color:var(--dim);
+  text-decoration:none;font-size:13.5px;transition:.16s;margin-bottom:2px}
+aside a:hover{background:var(--panel2);color:var(--txt)}
+aside a.on{background:rgba(86,182,194,.11);color:var(--cyan);font-weight:600}
+aside a .ic{flex:none}
+
+main{min-width:0}
+.crumb{font-size:12.5px;color:var(--dim2);margin-bottom:16px}
+.crumb a{color:var(--dim);text-decoration:none}
+.crumb a:hover{color:var(--cyan)}
+
+article{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:clamp(22px,3.4vw,42px);overflow-wrap:break-word}
+article h1{font-size:clamp(25px,3.6vw,36px);font-weight:800;margin-bottom:8px;line-height:1.3}
+article h1::after{content:'';display:block;width:50px;height:3px;margin-top:15px;border-radius:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--purple))}
+article h2{font-size:clamp(19px,2.5vw,25px);font-weight:700;margin:38px 0 13px;
+  padding-top:19px;border-top:1px solid var(--line)}
+article h3{font-size:17.5px;font-weight:700;margin:26px 0 10px;color:var(--cyan)}
+article h4{font-size:15.5px;font-weight:700;margin:20px 0 8px;color:#b9c3d1}
+article p{margin:12px 0;color:#c6cedb}
+article a{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(86,182,194,.3)}
+article a:hover{border-bottom-color:var(--cyan)}
+article ul,article ol{margin:12px 0 12px 24px;color:#c6cedb}
+article li{margin:6px 0}
+article li::marker{color:var(--dim)}
+article strong{color:#eaf0f8;font-weight:700}
+article em{color:var(--yellow);font-style:normal}
+article hr{border:none;border-top:1px solid var(--line);margin:30px 0}
+article blockquote{border-left:3px solid var(--cyan);background:rgba(86,182,194,.05);
+  padding:11px 17px;border-radius:0 8px 8px 0;margin:16px 0;color:#aab4c2}
+article blockquote p{margin:5px 0;color:#aab4c2}
+
+article code{background:#0c1119;border:1px solid var(--line);border-radius:5px;
+  padding:2px 6px;font-size:13px;color:var(--yellow);font-family:inherit}
+article pre{background:#0c1119;border:1px solid var(--line);border-radius:9px;
+  padding:15px 18px;overflow-x:auto;margin:15px 0;font-size:13px;line-height:1.85}
+article pre code{background:none;border:none;padding:0;color:#c3cbd8;font-size:13px;
+  white-space:pre;display:block}
+
+article table{width:100%;border-collapse:collapse;margin:17px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+article th,article td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);
+  white-space:nowrap}
+article th{color:var(--dim);font-weight:600;font-size:12.5px;letter-spacing:.04em;
+  background:rgba(86,182,194,.035)}
+article td{color:#c2cad6}
+article tr:hover td{background:rgba(86,182,194,.03)}
+
+.pager{display:flex;justify-content:space-between;gap:13px;margin-top:24px;flex-wrap:wrap}
+.pager a{flex:1;min-width:180px;padding:13px 17px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel);text-decoration:none;transition:.2s}
+.pager a:hover{border-color:rgba(86,182,194,.45);background:var(--panel2)}
+.pager a .l{font-size:11.5px;color:var(--dim2);display:block;margin-bottom:3px}
+.pager a .t{font-size:14px;color:var(--txt);font-weight:600}
+.pager a.nx{text-align:right}
+
+footer{max-width:1240px;margin:0 auto;padding:30px 22px 50px;text-align:center;
+  color:var(--dim2);font-size:12.5px;border-top:1px solid var(--line)}
+footer a{color:var(--dim);text-decoration:none}
+footer a:hover{color:var(--cyan)}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr;gap:20px}
+  aside{position:static;max-height:none}
+  aside .list{display:flex;flex-wrap:wrap;gap:5px}
+  aside a{margin:0}
+}
+</style>
+</head>
+<body>
+<div id="bg"></div><div id="grid"></div>
+
+<header>
+  <div class="nav">
+    <a class="brand" href="index.html">AutoSync</a>
+    <a class="lnk" href="index.html">首页</a>
+    <a class="lnk" href="https://szkele1145.github.io/AutoSync/compare.html">改进对比</a>
+    <span class="sp"></span>
+    <a class="gh" href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="hd">文档</div>
+    <div class="list"><a href="index.html"><span class="ic">🏠</span>首页</a>
+      <a href="compare.html"><span class="ic">⚖️</span>相比原版的改进</a>
+      <a href="deploy-linux.html"><span class="ic">🐧</span>Linux 部署</a>
+      <a href="deploy-windows.html"><span class="ic">🪟</span>Windows 部署</a>
+      <a href="client-config.html" class="on"><span class="ic">⚙️</span>客户端配置</a>
+      <a href="server-python.html"><span class="ic">🐍</span>服务端 · Python 版</a>
+      <a href="server-mcdr.html"><span class="ic">🧩</span>服务端 · MCDR 版</a>
+      <a href="faq.html"><span class="ic">❓</span>常见问题</a>
+      <a href="msfp.html"><span class="ic">📡</span>MSFP 协议</a></div>
+  </aside>
+  <main>
+    <div class="crumb"><a href="index.html">首页</a> / 文档 / 客户端配置</div>
+    <article>
+<h1 id="mcpatchyml">客户端配置（<code>mcpatch.yml</code>）</h1>
+<p><code>mcpatch.yml</code> 是客户端唯一的配置文件，<strong>文件名固定、大小写敏感</strong>，必须和 <code>AutoSync-1.0.0.jar</code> 放在同一个目录。</p>
+<ul>
+<li>没开版本隔离（HMCL / PCL 的"版本隔离"开关）：目录是 <code>.minecraft/</code></li>
+<li>开了版本隔离：目录是 <code>.minecraft/versions/&lt;版本名&gt;/</code></li>
+</ul>
+<p>本文按下表逐键说明。<strong>默认值 = 不写这一项时程序用的值</strong>（取自客户端 <code>AppConfig</code>）。</p>
+<hr />
+<h2 id="0">0. 完整示例</h2>
+<p>把下面这份存成 <code>mcpatch.yml</code> 放在 jar 同级目录，改一下 <code>urls</code> 就能用：</p>
+<pre><code class="language-yaml">urls:
+  - mc.example.net:8123
+base-path: '.'
+version-file-path: version-label.txt
+allow-error: false
+window-title: AutoSync
+show-has-update-message: false
+show-no-update-message: false
+mirror-mode: false
+mirror-backup: true
+source-mode: auto
+auto-select-source: true
+manual-source: ''
+source-cache-seconds: 3600
+download-threads: 32
+concurrent-files: 2
+tcp-timeout: 15000
+retries: 3
+detect-mod-conflicts: true
+</code></pre>
+<blockquote>
+<p>仓库里的 <a href="../client/mcpatch.yml">client/mcpatch.yml</a> 是<strong>带注释的完整模板</strong>，可以直接复制。</p>
+</blockquote>
+<p>启动器里给这个版本加上 JVM 参数：</p>
+<pre><code>-javaagent:AutoSync-1.0.0.jar
+</code></pre>
+<p>（如果是版本隔离，参数里写相对路径即可，启动器的工作目录就是版本目录。）</p>
+<hr />
+<h2 id="1">1. 更新源</h2>
+<h3 id="urls"><code>urls</code>（必填）</h3>
+<ul>
+<li><strong>类型</strong>：字符串列表，格式 <code>主机:端口</code></li>
+<li><strong>默认值</strong>：空列表（不写就等于没有更新源，客户端会报错退出）</li>
+<li><strong>说明</strong>：MSFP 裸 TCP 的更新源地址，通常指向 frp 隧道暴露出来的公网地址。可以写多个（同一台的多入口、或多台服务端），客户端会<strong>并发测速后选最快的</strong>；测速失败时按书写顺序依次尝试。</li>
+</ul>
+<pre><code class="language-yaml">urls:
+  - mc.example.net:8123
+  - backup.example.net:8123
+</code></pre>
+<p><strong>建议值</strong>：至少写 1 个；有条件就写 2 个（一台挂掉自动切另一台）。<strong>不要</strong>写 <code>http://</code> 前缀——这个协议不是 HTTP。</p>
+<h3 id="auto-select-source-manual-source-source-cache-seconds-source-probe-timeout-source-weight-speed-source-weight-latency"><code>auto-select-source</code> / <code>manual-source</code> / <code>source-cache-seconds</code> / <code>source-probe-timeout</code> / <code>source-weight-speed</code> / <code>source-weight-latency</code></h3>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>默认值</th>
+<th>含义</th>
+<th>建议</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auto-select-source</code></td>
+<td><code>true</code></td>
+<td>启动时并发测速所有 <code>urls</code>，按综合得分选最优源</td>
+<td>保持 <code>true</code></td>
+</tr>
+<tr>
+<td><code>manual-source</code></td>
+<td><code>''</code></td>
+<td>手动锁定某个源（写 <code>urls</code> 里的某一项），填了就跳过测速</td>
+<td>只在排查时临时用</td>
+</tr>
+<tr>
+<td><code>source-cache-seconds</code></td>
+<td><code>3600</code></td>
+<td>测速结果缓存时间（秒）</td>
+<td>保持默认；源不稳定可降到 <code>600</code></td>
+</tr>
+<tr>
+<td><code>source-probe-timeout</code></td>
+<td><code>5000</code></td>
+<td>单个源的测速超时（毫秒）</td>
+<td>移动网络差可升到 <code>8000</code></td>
+</tr>
+<tr>
+<td><code>source-weight-speed</code></td>
+<td><code>0.8</code></td>
+<td>综合评分里吞吐的权重</td>
+<td>保持默认（玩家痛点是下载慢）</td>
+</tr>
+<tr>
+<td><code>source-weight-latency</code></td>
+<td><code>0.2</code></td>
+<td>综合评分里延迟的权重</td>
+<td>两个权重之和建议 = <code>1.0</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="multi-source-download"><code>multi-source-download</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>true</code></li>
+<li><strong>说明</strong>：开启后，一个<strong>大文件</strong>的分块会轮转分配给多个更新源，叠加多条线路的带宽。前提是所有源上的同名文件内容一致——不一致时 SHA-256 校验会失败并回退重下。</li>
+<li><strong>建议</strong>：多源且内容一致时保持 <code>true</code>；只有一个源时无影响。</li>
+</ul>
+<h3 id="source-speedtest-file"><code>source-speedtest-file</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>speedtest.bin</code></li>
+<li><strong>说明</strong>：测速用的文件名（相对更新源根目录）。服务端会在 <code>dist_dir</code> 下自动生成一个 512KB 的同名文件。</li>
+<li><strong>建议</strong>：保持默认。若改动，服务端配置的 <code>speedtest_name</code> 必须同步改。</li>
+</ul>
+<hr />
+<h2 id="2">2. 路径与版本</h2>
+<h3 id="base-path"><code>base-path</code></h3>
+<ul>
+<li><strong>类型</strong>：字符串</li>
+<li><strong>默认值</strong>：<code>""</code>（空）</li>
+<li><strong>说明</strong>：更新起始目录，也就是"文件都放到哪个目录下"。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>取值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>''</code>（空）</td>
+<td>自动搜索 <code>.minecraft</code> 的<strong>父目录</strong>作为更新起始目录</td>
+</tr>
+<tr>
+<td><code>'.'</code></td>
+<td>当前工作目录（jar 所在目录）</td>
+</tr>
+<tr>
+<td><code>'..'</code></td>
+<td>当前工作目录的上一级</td>
+</tr>
+<tr>
+<td><code>'ab/cd'</code></td>
+<td>当前工作目录下的 <code>ab/cd</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>建议值</strong>：</li>
+<li><strong>开了版本隔离 → 必须写 <code>'.'</code></strong>。否则会把文件更新到 <code>.minecraft</code> 的上级目录（比如 <code>versions/</code> 甚至 <code>.minecraft</code> 外面），mods 看着"下载成功"却加载不到。</li>
+<li>没开版本隔离 → 用默认的 <code>''</code> 或显式写 <code>'.'</code> 都可以；推荐显式写 <code>'.'</code>，行为更可预期。</li>
+</ul>
+<h3 id="version-file-path"><code>version-file-path</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>version-label.txt</code></li>
+<li><strong>说明</strong>：记录客户端当前已同步到哪个清单版本的文件（相对 <code>base-path</code>）。客户端靠比对它和远端 <code>manifest.json</code> 的 <code>version</code> 决定要不要更新。</li>
+<li><strong>建议</strong>：保持默认。<strong>不要</strong>把要分发的文件起名叫 <code>version-label.txt</code>。</li>
+</ul>
+<hr />
+<h2 id="3">3. 失败行为与提示</h2>
+<h3 id="allow-error"><code>allow-error</code>（重要）</h3>
+<ul>
+<li><strong>默认值</strong>：<code>false</code></li>
+<li><strong>说明</strong>：同步过程中出错（下载失败、校验失败、连接超时……）时是否继续启动游戏。</li>
+<li><code>false</code> = <strong>中止游戏启动</strong>，玩家看到错误提示，不会带着残缺的 mods 进服；</li>
+<li><code>true</code> = 忽略错误继续启动。</li>
+<li><strong>建议值</strong>：<strong><code>false</code>（默认）</strong>。用 <code>true</code> 时，一旦某个前置没下下来，玩家会在加载界面直接崩，报错还很难懂；<code>false</code> 至少能明确告诉玩家"同步失败了"。</li>
+</ul>
+<blockquote>
+<p>图形模式（<code>-javaagent</code>）下出错会弹窗让玩家自己选；非图形模式下才严格按这个开关执行。</p>
+</blockquote>
+<h3 id="show-has-update-message-show-no-update-message"><code>show-has-update-message</code> / <code>show-no-update-message</code></h3>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>默认值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>show-has-update-message</code></td>
+<td><code>true</code></td>
+<td>有更新时是否弹更新日志提示框</td>
+</tr>
+<tr>
+<td><code>show-no-update-message</code></td>
+<td><code>true</code></td>
+<td>没更新时是否弹"资源文件暂无更新！"提示框</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>建议值</strong>：整合包 / 公共服都设成 <strong><code>false</code></strong>，少打扰玩家。（旧配置里写 <code>show-finish-message</code> 也认，会被这两个键继承。）</li>
+</ul>
+<h3 id="auto-close-changelogs"><code>auto-close-changelogs</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>0</code></li>
+<li><strong>说明</strong>：更新日志窗口自动关闭的毫秒数；<code>0</code> = 不自动关，需要玩家手点。</li>
+<li><strong>建议</strong>：<code>0</code>（让玩家自己看完）或 <code>5000</code>（看 5 秒自动关）。</li>
+</ul>
+<h3 id="silent-mode"><code>silent-mode</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>false</code></li>
+<li><strong>说明</strong>：<code>true</code> = 启动后先在后台静默检查更新，<strong>只有真的要下载文件时才显示窗口</strong>；没有更新就直接进游戏。仅图形模式有效。</li>
+<li><strong>建议</strong>：想要"存在感最低"就 <code>true</code>；调试阶段保持 <code>false</code>，方便看日志。</li>
+</ul>
+<h3 id="window-title-disable-theme"><code>window-title</code> / <code>disable-theme</code></h3>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>默认值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>window-title</code></td>
+<td><code>AutoSync</code></td>
+<td>更新窗口的标题</td>
+</tr>
+<tr>
+<td><code>disable-theme</code></td>
+<td><code>false</code></td>
+<td><code>true</code> = 关掉主题（纯色窗口），排查主题渲染问题时用</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4">4. 镜像模式（重点）</h2>
+<h3 id="mirror-mode"><code>mirror-mode</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>false</code></li>
+<li><strong>说明</strong>：是否让客户端 <code>mods/</code> 目录与服务端清单<strong>完全一致</strong>。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>取值</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>false</code>（默认）</td>
+<td><strong>只维护清单里列出的文件</strong>：缺的下、改的重下；清单<strong>之外</strong>的文件（玩家自己加的 mod）一概不碰</td>
+</tr>
+<tr>
+<td><code>true</code></td>
+<td><strong>严格镜像</strong>：清单之外的文件会被清理掉——玩家自己加的 mod、手动换的整合包附属、临时放进去的测试 jar，<strong>全部消失</strong></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>建议值</strong>：</li>
+<li><strong>公共服 / 整合包分发 → <code>false</code></strong>（默认）。玩家自加的优化 mod（Sodium、Iris 之类）不会被清掉，投诉少。</li>
+<li>只有当你确实要求"客户端必须和服务端一模一样、多一个文件都不行"（例如比赛服、反作弊服）才开 <code>true</code>。</li>
+</ul>
+<blockquote>
+<p><strong>严格镜像的后果</strong>，开之前请想清楚：<br />
+1. 玩家自己装的任何 mod 都会被移除，包括纯客户端的性能 mod；<br />
+2. 玩家手动放进 <code>mods/</code> 的配置文件、材质包（如果也在分发目录范围内）同样会被清；<br />
+3. 一旦服务端清单配错（比如 <code>dist_dir</code> 指向了空目录），<strong>所有玩家</strong>的 mods 会被清空——客户端有一个兜底：<strong>清单里一个 <code>mods/</code> 条目都没有时绝不执行清理</strong>，只打警告。但清单"少了一部分"是没法自动识别的。</p>
+</blockquote>
+<h3 id="mirror-backup"><code>mirror-backup</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>true</code></li>
+<li><strong>说明</strong>：镜像模式清理时，是<strong>先移动</strong>到备份目录还是<strong>直接删除</strong>。</li>
+<li><code>true</code> = 移动到 <code>&lt;base-path&gt;/.modsync-removed/</code> 下（保留原来的相对路径结构），可以人工找回；</li>
+<li><code>false</code> = 直接删除，不可恢复。</li>
+<li><strong>建议值</strong>：<strong>保持 <code>true</code></strong>。多占一点磁盘，换一次"手滑能救回来"。</li>
+</ul>
+<h3 id="detect-mod-conflicts"><code>detect-mod-conflicts</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>true</code></li>
+<li><strong>说明</strong>：开启后，如果 <code>mods/</code> 里存在与清单托管模组 <strong>modId 相同</strong>的非托管 jar（玩家自加的同名模组），会被自动重命名为 <code>xxx.jar.disabled</code>，避免 NeoForge 因 <code>Duplicate mod</code> 直接崩游戏。</li>
+<li><strong>建议</strong>：保持 <code>true</code>。这是兜底机制——镜像模式开着时基本用不到。</li>
+</ul>
+<hr />
+<h2 id="5">5. 下载来源模式（重点）</h2>
+<h3 id="source-mode"><code>source-mode</code></h3>
+<ul>
+<li><strong>类型</strong>：字符串，只能是 <code>auto</code> / <code>cdn</code> / <code>server</code>（不区分大小写）</li>
+<li><strong>默认值</strong>：<code>auto</code></li>
+</ul>
+<p>清单里每个文件条目都带 <code>urls</code>，例如：</p>
+<pre><code class="language-json">{ &quot;path&quot;: &quot;mods/x.jar&quot;, &quot;size&quot;: 123456, &quot;sha256&quot;: &quot;..&quot;,
+  &quot;urls&quot;: [&quot;mods/x.jar&quot;, &quot;https://cdn.modrinth.com/data/xxxx/versions/yyyy/x.jar&quot;] }
+</code></pre>
+<ul>
+<li>相对地址（<code>mods/x.jar</code>）→ 拼到更新源上走 MSFP；</li>
+<li><code>http(s)://</code> 绝对地址 → Modrinth 官方 CDN 直链。</li>
+</ul>
+<p>到底用哪个，由 <code>source-mode</code> 决定：</p>
+<table>
+<thead>
+<tr>
+<th>取值</th>
+<th>行为</th>
+<th>什么时候用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auto</code>（默认）</td>
+<td>每次同步开始时，给 CDN 与自己的更新源<strong>并发测一次速</strong>，哪个快用哪个</td>
+<td>绝大多数情况。CDN 快就省你的带宽，CDN 被墙/慢就走自己的服务端</td>
+</tr>
+<tr>
+<td><code>cdn</code></td>
+<td>强制走 CDN 直链，<strong>不测速</strong>；某个文件 CDN 失败时照样回退到更新源</td>
+<td>你的服务器带宽很小、想尽量把流量甩给 Modrinth</td>
+</tr>
+<tr>
+<td><code>server</code></td>
+<td>强制走自己的更新源，<strong>完全跳过 CDN</strong>（不测速、不尝试直链）</td>
+<td>服务端在国内且 CDN 被墙；或你要精确控制流量</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>建议值</strong>：<strong><code>auto</code></strong>。</li>
+<li><strong>兼容旧写法</strong>：<code>prefer-cdn: true</code> 等价于 <code>source-mode: cdn</code>，<code>prefer-cdn: false</code> 等价于 <code>source-mode: server</code>。两个都写时以 <code>source-mode</code> 为准。</li>
+</ul>
+<h3 id="cdn">CDN 测速与调优</h3>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>默认值</th>
+<th>含义</th>
+<th>建议</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>speedtest-min-size-mb</code></td>
+<td><code>10</code></td>
+<td>只有体积 ≥ 它的文件才会被挑来当测速样本（太小的文件测不出带宽）</td>
+<td>保持默认</td>
+</tr>
+<tr>
+<td><code>speedtest-duration-ms</code></td>
+<td><code>2000</code></td>
+<td>每个来源的测速时长（毫秒），CDN 与服务端并发测</td>
+<td>保持默认</td>
+</tr>
+<tr>
+<td><code>cdn-prefer-ratio</code></td>
+<td><code>0.5</code></td>
+<td>CDN 速度 ≥ 服务端速度 × 这个比例就算"够快"，选 CDN（判据 <code>cdn_speed &gt;= server_speed * ratio</code>）</td>
+<td>调小更偏向 CDN（省带宽）；调到 <code>1.0</code> 以上表示"CDN 必须更快才用它"</td>
+</tr>
+<tr>
+<td><code>cdn-max-threads</code></td>
+<td><code>64</code></td>
+<td>CDN 测速太慢时，把连接数翻倍重测一次的上限</td>
+<td>保持默认</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cdn-exclude"><code>cdn-exclude</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>[]</code></li>
+<li><strong>说明</strong>：强制走更新源、<strong>不尝试 CDN</strong> 的文件名单。每一项可以是文件名通配（<code>Flashback-*.jar</code>）或相对路径（<code>mods/xxx.jar</code>，也支持 <code>mods/lib/*.jar</code>），<strong>不区分大小写</strong>。</li>
+<li><strong>建议</strong>：把那些"CDN 上本来就没有"的自托管文件写进来，省掉一次注定失败的 CDN 请求。</li>
+</ul>
+<pre><code class="language-yaml">cdn-exclude:
+  - Flashback-*.jar          # 自托管，CDN 上没有
+  - mods/lib/*.jar           # 自编译的库
+</code></pre>
+<h3 id="cdn-timeout"><code>cdn-timeout</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>15000</code></li>
+<li><strong>说明</strong>：CDN 直链的连接超时与读超时（毫秒）。只要还在持续收到数据就不会超时，所以可以放得比 <code>http-timeout</code> 宽松。</li>
+<li><strong>建议</strong>：保持默认。</li>
+</ul>
+<hr />
+<h2 id="6">6. 并发与超时（重点）</h2>
+<h3 id="concurrent-files-download-threads"><code>concurrent-files</code> × <code>download-threads</code> = 最大连接数</h3>
+<p>这是最容易把隧道打爆的两个键：</p>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>默认值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>concurrent-files</code></td>
+<td><code>2</code></td>
+<td><strong>同时下载多少个文件</strong>（程序内部会夹到 1~16）</td>
+</tr>
+<tr>
+<td><code>download-threads</code></td>
+<td><code>32</code></td>
+<td><strong>单个文件切成多少块并发下</strong>（每块一条连接）</td>
+</tr>
+<tr>
+<td><code>download-threshold</code></td>
+<td><code>1048576</code>（1MB）</td>
+<td>体积小于它的文件不分块，直接单线程下载</td>
+</tr>
+</tbody>
+</table>
+<p><strong>最大同时在用的连接数 ≈ <code>concurrent-files</code> × <code>download-threads</code></strong>（小文件只占 1 条连接）。</p>
+<p>所以默认配置的峰值是 <strong>2 × 32 = 64 条</strong>连接。调之前先想清楚：</p>
+<ul>
+<li><strong>frp 隧道 / 家宽 / 云服务器的小带宽</strong>：64 条并发连接已经足够打满普通家宽；再加只会互相抢带宽，还可能触发云厂商的连接数限制或 frp 的 <code>maxPoolCount</code>；</li>
+<li><strong>单台客户端的服务端压力</strong>：每个玩家 <code>concurrent-files × download-threads</code> 条连接，10 个玩家同时更新就是几百条，服务端要能扛住；</li>
+<li><strong>真想调大</strong>：优先加 <code>concurrent-files</code>（把 TCP 建连和 SIZE 请求的等待时间重叠掉，收益最明显），<code>concurrent-files</code> 不建议超过 <code>8</code>；</li>
+<li><strong>下载慢时先降不要升</strong>：<code>concurrent-files: 1</code> + <code>download-threads: 8</code> 是"保守档"，适合带宽小、玩家多的场景。</li>
+</ul>
+<p><strong>参考档位</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th><code>concurrent-files</code></th>
+<th><code>download-threads</code></th>
+<th>峰值连接</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>保守（小带宽 / 玩家多 / 隧道不稳）</td>
+<td>1</td>
+<td>8</td>
+<td>8</td>
+</tr>
+<tr>
+<td><strong>默认（推荐）</strong></td>
+<td><strong>2</strong></td>
+<td><strong>32</strong></td>
+<td><strong>64</strong></td>
+</tr>
+<tr>
+<td>激进（大带宽专线 / 玩家少）</td>
+<td>4</td>
+<td>32</td>
+<td>128</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>如果客户端报 <code>Connection reset</code> 或大量超时，<strong>先把 <code>concurrent-files</code> 降到 1</strong> 再试。</p>
+</blockquote>
+<h3 id="_1">超时与重试</h3>
+<table>
+<thead>
+<tr>
+<th>键</th>
+<th>默认值</th>
+<th>含义</th>
+<th>建议</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tcp-timeout</code></td>
+<td><code>15000</code></td>
+<td>MSFP 的连接超时与读超时（毫秒）。大文件只要还在持续收数据就不会超时</td>
+<td>移动网络差可升到 <code>30000</code></td>
+</tr>
+<tr>
+<td><code>retries</code></td>
+<td><code>3</code></td>
+<td>网络问题的重试次数</td>
+<td>建议 <code>timeout × retries</code> 总时长控制在 20 秒内</td>
+</tr>
+<tr>
+<td><code>private-timeout</code></td>
+<td><code>7000</code></td>
+<td>私有协议超时（毫秒）</td>
+<td>保持默认</td>
+</tr>
+<tr>
+<td><code>http-timeout</code></td>
+<td><code>7000</code></td>
+<td>HTTP 系列协议超时（毫秒）</td>
+<td>保持默认</td>
+</tr>
+<tr>
+<td><code>http-headers</code></td>
+<td><code>{}</code></td>
+<td>HTTP 系列协议的自定义请求头</td>
+<td>一般不用填</td>
+</tr>
+<tr>
+<td><code>ignore-ssl-cert</code></td>
+<td><code>false</code></td>
+<td>忽略 HTTPS 证书校验</td>
+<td>只在自签证书场景临时开</td>
+</tr>
+</tbody>
+</table>
+<h3 id="test-mode"><code>test-mode</code></h3>
+<ul>
+<li><strong>默认值</strong>：<code>false</code></li>
+<li><strong>说明</strong>：开启后<strong>每次启动都重新下载全部文件</strong>，用来实测网速。会消耗大量流量。</li>
+<li><strong>建议</strong>：只在测速 / 压测时临时打开，用完记得关。</li>
+</ul>
+<hr />
+<h2 id="7">7. 排查用清单</h2>
+<p>改配置之前，先确认这几件事：</p>
+<pre><code class="language-yaml">urls:
+  - mc.example.net:8123     # ① 没有 http:// 前缀，端口就是 frp 暴露的端口
+base-path: '.'              # ② 版本隔离必须写 '.'
+allow-error: false          # ③ 同步失败要中止启动，而不是带着残缺 mods 进去
+mirror-mode: false          # ④ 不确定就先别开镜像
+concurrent-files: 2         # ⑤ 报 Connection reset 先降到 1
+</code></pre>
+<p>日志在哪：</p>
+<ul>
+<li>图形模式下更新窗口里就有实时日志，可以直接框选复制；</li>
+<li>同时会写到 <strong>jar 同级目录</strong>下的 <code>mcpatch.log</code>（图形模式）或 <code>mcpatch.log.txt</code>（非图形模式）；</li>
+<li>下载中的临时文件在 <code>&lt;base-path&gt;/.modsync-temp/</code> 下，镜像模式清理掉的文件在 <code>&lt;base-path&gt;/.modsync-removed/</code> 下（保留原相对路径）。</li>
+</ul>
+<p>更多排查见 <a href="常见问题.md">常见问题.md</a>。</p>
+    </article>
+    <div class="pager"><a href="deploy-windows.html"><span class="l">上一篇</span><span class="t">← Windows 部署</span></a>
+      <a class="nx" href="server-python.html"><span class="l">下一篇</span><span class="t">服务端 · Python 版 →</span></a></div>
+  </main>
+</div>
+
+<footer>
+  <a href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub</a> ·
+  <a href="https://github.com/szkele1145/AutoSync/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a> ·
+  基于 <a href="https://github.com/BalloonUpdate/McPatch2" target="_blank" rel="noopener">McPatch2</a> 改造 ·
+  本项目由 <b style="color:var(--purple)">DeepSeek-V4.1-Flash</b> 辅助制作
+</footer>
+</body>
+</html>

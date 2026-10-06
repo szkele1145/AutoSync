@@ -1,0 +1,25 @@
+﻿jar : C:\Users\一只屑\Desktop\ModSync\Mcpatch2JavaClient\build\libs\AutoSync-1.0.0.jar
+  [PASS] 构建产物存在  ->  C:\Users\一只屑\Desktop\ModSync\Mcpatch2JavaClient\build\libs\AutoSync-1.0.0.jar
+工作目录: C:\Users\一只屑\AppData\Local\Temp\autosync-gui-live-wk2m1cg_
+假 CDN : http://127.0.0.1:57930
+假 MSFP: msfp://127.0.0.1:57931
+探针   : C:\Users\一只屑\AppData\Local\Temp\autosync-gui-live-wk2m1cg_\scroll-probe-agent.jar  ->  C:\Users\一只屑\AppData\Local\Temp\autosync-scroll-probe-11244.txt
+  [PASS] 图形模式客户端正常退出  ->  exit=0
+  [PASS] 日志确认跑的是图形模式（会弹窗）
+  [PASS] 真的做了测速选源  ->  [ INFO  ]  [测速] CDN 与 服务端 并发测速，各 32 条连接，时长 1000ms，每个来源最多读 8.00 MB
+  [PASS] big.jar 真的从 CDN 下载成功了
+  [PASS] big.jar 内容与清单一致
+  [PASS] 没有临时文件残留
+  [PASS] 图形模式写的是 mcpatch.log  ->  C:\Users\一只屑\AppData\Local\Temp\autosync-gui-live-wk2m1cg_\gui\prog\mcpatch.log
+  [PASS] 整个过程没有截图、没有操控鼠标（不打扰用户）
+  [info] 探针样本 21 个，其中内容超出一屏的 17 个；全程最大距底 0px
+  [PASS] 探针采样文件存在  ->  C:\Users\一只屑\AppData\Local\Temp\autosync-scroll-probe-11244.txt
+  [PASS] 同步过程中探针采到了足够的样本  ->  21 个
+  [PASS] 同步过程中日志确实超出了一屏（有滚动可言）  ->  17 个溢出样本
+  [PASS] 日志区全程没有掉队（连续「距底 > 30px」的样本不超过 1 个）  ->  最长连续 0 个样本，全程最大距底 0px
+  [PASS] 同步结束前最后 5 个样本都贴在底部  ->  gap=0 at_bottom=True；gap=0 at_bottom=True；gap=0 at_bottom=True；gap=0 at_bottom=True；gap=0 at_bottom=True
+（临时目录会在本次运行后保留，便于人工看采样与截图）C:\Users\一只屑\AppData\Local\Temp\autosync-gui-live-wk2m1cg_
+
+结果：全部通过
+探针采样：C:\Users\一只屑\AppData\Local\Temp\autosync-scroll-probe-11244.txt
+截图目录：C:\Users\一只屑\AppData\Local\Temp\autosync-gui-live-wk2m1cg_\shots

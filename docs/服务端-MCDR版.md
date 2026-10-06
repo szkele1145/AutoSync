@@ -164,11 +164,11 @@ MCDR 版**不复制业务逻辑**：
 
 ```
 server/python/autosync/      ← 唯一的一份核心代码（独立版本体）
-server/mcdr/autosync/core/   ← 构建时由 tools/build-mcdr.ps1 同步过来的逐字节副本
+server/mcdr/autosync/core/   ← 构建时由 tools/build_mcdr.py 同步过来的逐字节副本
 server/mcdr/autosync/entry.py← MCDR 入口（唯一依赖 mcdreforged 的模块）
 ```
 
-* `tools/build-mcdr.ps1` 在打包前会把 `server/python/autosync` 复制到 `server/mcdr/autosync/core`，并逐个文件比对 SHA-256；**任何一处不一致都会报错中止打包**。
+* `tools/build_mcdr.py`（跨平台，推荐）或 `tools/build-mcdr.ps1`（Windows）在打包前会把 `server/python/autosync` 复制到 `server/mcdr/autosync/core`，并逐个文件比对 SHA-256；**任何一处不一致都会报错中止打包**。
 * 入口模块用相对导入 `from .core.builder import AutoSyncCore` 使用核心，并直接复用 `from .core.shell import AutoSyncShell` 的交互层——MCDR 版只是把 shell 的输出通道换成了 RText。
 * 因此**修 bug 只改 `server/python/autosync`**，然后执行一次打包脚本即可。
 
@@ -178,15 +178,30 @@ server/mcdr/autosync/entry.py← MCDR 入口（唯一依赖 mcdreforged 的模�
 
 如果你改了核心代码或入口，需要重新生成插件包：
 
-```powershell
-# Windows PowerShell（推荐：装过 mcdreforged 的话会用它做真实验证）
-pwsh -File tools/build-mcdr.ps1 -Python "<你的python.exe>"
+```bash
+# 跨平台（Windows / Linux / macOS / CI 都推荐这个，纯标准库，无需 PowerShell）
+python tools/build_mcdr.py
 
-# 没有装 mcdreforged 也能打包（会退回 tests/mcdr_stub 桩做结构性校验）
+# 指定带 mcdreforged 的解释器 —— 会用它做真实的加载 + 命令注册验证
+python tools/build_mcdr.py --python /path/to/python
+
+# 改了版本号
+python tools/build_mcdr.py --version 1.0.1
+
+# 跳过入口校验（不推荐）
+python tools/build_mcdr.py --skip-verify
+```
+
+Windows 上也可以沿用 PowerShell 版（做的事完全一样）：
+
+```powershell
+pwsh -File tools/build-mcdr.ps1
 pwsh -File tools/build-mcdr.ps1 -SkipVerify
 ```
 
-脚本会依次做：同步核心代码 → 比对 SHA-256 → 清 `__pycache__` → 校验入口 → 压缩成 `.zip` → **改名成 `.mcdr`**（`Compress-Archive` 不接受 `.mcdr` 后缀，直接压会被拒）→ 用 `tools/check-mcdr-package.py` 检查包内结构与 `mcdreforged.plugin.json` 元数据 → 打印包内文件清单。
+> 两个脚本在没装 mcdreforged 时都会自动退回 `tests/mcdr_stub` 桩做结构性校验。
+
+脚本会依次做：同步核心代码 → 比对 SHA-256 → 清 `__pycache__` → 校验入口 → 打成 zip → **命名为 `.mcdr`**（`.mcdr` 本身就是 zip，只是后缀不同；zip 内路径必须是正斜杠）→ 用 `tools/check-mcdr-package.py` 检查包内结构与 `mcdreforged.plugin.json` 元数据 → 打印包内文件清单。
 
 手工验证包结构：
 

@@ -130,7 +130,12 @@ AutoSync/
 ├── .gitignore
 ├── client/
 │   ├── AutoSync-1.0.0.jar        客户端 javaagent（javaagent / 独立进程 / modloader 三种启动方式）
-│   └── mcpatch.yml               客户端配置模板（含全部配置项与注释）
+│   ├── mcpatch.yml               客户端配置模板（含全部配置项与注释）
+│   └── src-java/                 客户端 Java 源码（Gradle 工程，可自行编译）
+│       ├── src/                  源码（sync / config / ui / logging / impl ...）
+│       ├── build.gradle.kts      构建脚本（产物 AutoSync-<版本>.jar）
+│       ├── gradlew / gradlew.bat 构建包装器
+│       └── tests/                验收脚本（GUI 断言、假 CDN/MSFP、滚动探针）
 ├── server/
 │   ├── python/                   独立 Python 版服务端（纯标准库，Python 3.11+）
 │   │   ├── autosync/             程序本体
@@ -160,13 +165,14 @@ AutoSync/
 └── tools/
     ├── deploy.py                 SSH 增量上传 + 远端重建清单
     ├── upload.bat / upload-full.bat   Windows 上的 deploy.py 包装
-    ├── build-mcdr.ps1            同步核心代码 + 校验 + 打包 .mcdr
+    ├── build_mcdr.py             （跨平台，CI 推荐）同步核心 + 校验 + 打包 .mcdr
+    ├── build-mcdr.ps1            （Windows）同上功能的 PowerShell 实现
     ├── verify-mcdr-entry.py      MCDR 入口校验（有真 MCDR 用真的，没有用桩）
     └── check-mcdr-package.py     检查 .mcdr 包结构与元数据
 ```
 
 > **代码复用**：`server/mcdr/autosync/core/` 是 `server/python/autosync/` 的**逐字节副本**，
-> 由 `tools/build-mcdr.ps1` 在每次打包前同步并做 SHA-256 比对（不一致就报错中止）。
+> 由 `tools/build_mcdr.py`（跨平台，推荐）或 `tools/build-mcdr.ps1`（Windows）在每次打包前同步并做 SHA-256 比对（不一致就报错中止）。
 > 业务逻辑只写一份，MCDR 版只多了一个入口模块 `autosync/entry.py`。
 
 ---

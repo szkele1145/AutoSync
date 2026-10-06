@@ -1,0 +1,152 @@
+﻿
+== 1. 窗口能打开、结构正确
+  [PASS] 窗口已显示
+  [PASS] 窗口标题是 AutoSync  ->  实际：AutoSync
+  [PASS] 窗口可缩放
+  [PASS] 上下两块用 JSplitPane 垂直分隔
+  [PASS] resizeWeight=0：窗口变高时多出来的高度给日志区
+  [PASS] 日志区是 JTextPane + JScrollPane
+  [PASS] 日志区不可编辑
+  [PASS] 分隔条位置已初始化  ->  divider=100
+  [PASS] 分隔条仍可拖动（dividerSize>0）  ->  dividerSize=8
+  [PASS] 日志上限是 2000 行
+  [PASS] 上半部状态区的目标高度落在 96~110px 区间  ->  100px
+
+== 2. 日志实时追加
+  [PASS] Log.info 之后窗口里出现了这一行
+  [PASS] 第二条也实时出现了
+  [info] 取到的行长度=35，字符码=「16:12:02.783 [ INFO  ] 实时日志测试：第一条」
+  [PASS] 行格式与控制台/文件日志一致（时间 + 等级 + 内容）  ->  「16:12:02.783 [ INFO  ] 实时日志测试：第一条」
+  [PASS] 每行有时间戳 [ HH:mm:ss.SSS ] 与等级标记 [ INFO  ]
+
+== 3. 自动滚到底部
+  [PASS] 400 行都渲染出来了
+  [PASS] 滚动条停在底部
+  [PASS] 最后一行在视口里可见（真的滚到底了）
+  [PASS] 前面的行还在文档里
+
+== 4. 手动往上翻之后不再被强制拉回
+  [PASS] 已经翻到最上面  ->  value=0
+  [PASS] 上翻期间的新日志照样实时渲染
+  [PASS] 滚动条没有被拉到底部  ->  value=0（拉回会是 7887 附近）
+  [PASS] 内部判定也确实认为用户不在底部
+  [PASS] 最后一行没有出现在视口里（内容是往上翻的旧日志）
+  [PASS] 翻回底部后的日志已渲染
+  [PASS] 用户翻回底部后，自动滚底恢复
+  [PASS] 最后一行重新可见
+
+== 5. 真实滚轮事件上翻
+  [PASS] 滚轮之前视图贴在底部  ->  value=8063 底部=8063
+  [PASS] 滚轮事件把视图往上翻走了  ->  value 8063 -> 7679（底部 8063）
+  [PASS] 上翻期间的新日志照样实时渲染
+  [PASS] 滚轮上翻后，新日志没有把视图拉回底部  ->  before=7679 after=7679（底部 8743，相距 1064px）
+  [PASS] 上翻位置基本没动（允许 ±64px 抖动）  ->  value 7679 -> 7679
+
+== 6. 日志只有一种前景色（无分级配色）
+  [PASS] 配色样例日志已渲染
+  [info] 改动前同一批样例里出现过 10 种前景色（#5C6370 时间戳 / #7F8C98 DEBUG / #D8DEE9 INFO / #E5C07B WARN / #E06C75 ERROR / #56B6C2 [CDN] / #C678DD [测速] / #98C379 [服务端] / #61AFEF [镜像模式] / #979FAD 结尾换行）
+  [info] 现在文档里所有 Element 的前景色 = [#FF979FAD]
+  [PASS] 整个文档的前景色只有一种  ->  实际 1 种：[#FF979FAD]
+  [PASS] 字符属性里的前景色与统一前景色一致  ->  期望 #FF979FAD，实际 [#FF979FAD]
+  [PASS] 组件前景色也是同一种（DefaultStyledDocument 结尾的换行叶子靠它解析颜色）  ->  #FF979FAD
+  [PASS] DEBUG 等级标记 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（配色样例：debug 行 里的 [ DEBUG ]）
+  [PASS] INFO 等级标记 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（配色样例：info 行 里的 [ INFO  ]）
+  [PASS] WARN 等级标记 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（配色样例：warn 行 里的 [ WARN  ]）
+  [PASS] ERROR 等级标记 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（配色样例：error 行 里的 [ ERROR ]）
+  [PASS] [CDN] 前缀 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（[CDN] 配色样例：cdn 行 里的 [CDN]）
+  [PASS] [CDN] 行正文 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（[CDN] 配色样例：cdn 行 里的 配色样例）
+  [PASS] [CDN] 的 WARN 等级标记 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（[CDN] 配色样例：cdn 警告行 里的 [ WARN  ]）
+  [PASS] [测速] 前缀 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（[测速] 配色样例：speedtest 行 里的 [测速]）
+  [PASS] [服务端] 前缀 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（[服务端] 配色样例：server 行 里的 [服务端]）
+  [PASS] 镜像模式 前缀（无方括号） 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（镜像模式：配色样例：mirror 行 里的 镜像模式）
+  [PASS] [镜像模式] 前缀 与统一前景色相同  ->  期望 #FF979FAD 实际 #FF979FAD（[镜像模式] 配色样例：mirror 方括号行 里的 [镜像模式]）
+  [PASS] 正文与前缀同色  ->  期望 #FF979FAD 实际 #FF979FAD（配色样例：info 行 里的 配色样例）
+  [PASS] 时间戳与正文同色  ->  期望 #FF979FAD 实际 #FF979FAD
+  [PASS] [CDN] 行的时间戳同色  ->  期望 #FF979FAD 实际 #FF979FAD
+
+== 7. 日志区默认占窗口的大部分高度
+  [info] 改动前：内容高度 442，分隔条 147（占 0.3326），日志区 287（占 0.6493）
+  [info] 现在　：内容高度 442，分隔条 100（占 0.2262），日志区 334（占 0.7557）
+  [info] 日志区占比提升 0.6493 -> 0.7557（+10.63 个百分点）
+  [PASS] 初始分隔条位置压到 110px 以内  ->  100px（改动前 147px）
+  [PASS] 上半部状态区仍保留最小高度（>=96px）  ->  100px
+  [PASS] 上半部状态区实际高度也在 110px 以内  ->  100px
+  [PASS] 日志区占比比改动前更大  ->  0.7557 > 0.6493
+  [PASS] 日志区默认占窗口大部分高度（>=70%）  ->  75.57%
+  [PASS] 442px 内容高度下初始分隔条就是 HEADER_HEIGHT  ->  100px
+  [PASS] 窗口再高，状态区也不会跟着长高（多出来的都给日志区）  ->  100px
+  [PASS] 窗口很矮时退回 HEADER_MIN_HEIGHT，状态区不被挤没  ->  96px
+  [PASS] 标题文字在状态区里完整可见（没有被截断）  ->  java.awt.Rectangle[x=262,y=15,width=120,height=17]，状态区 644x100
+  [PASS] 状态文字在状态区里完整可见（没有被截断）  ->  java.awt.Rectangle[x=296,y=36,width=52,height=17]，状态区 644x100
+  [PASS] 进度条在状态区里完整可见（没有被截断）  ->  java.awt.Rectangle[x=162,y=64,width=320,height=26]，状态区 644x100
+
+== 8. 嵌进窗口：无边框、细滚动条、背景融合、内边距
+  [info] 改动前 logScrollPane.getBorder() = com.formdev.flatlaf.ui.FlatBorder insets=3,3,3,3（FlatLaf 的 FlatBorder）
+  [PASS] JScrollPane 的 border 为空  ->  null
+  [PASS] 不再是 FlatLaf 的 FlatBorder（焦点蓝色描边的来源）  ->  null
+  [PASS] JTextPane 的 border 是 EmptyBorder  ->  javax.swing.border.EmptyBorder insets=java.awt.Insets[top=8,left=10,bottom=8,right=10]
+  [PASS] 内边距四边都 > 0（文字不贴边）  ->  java.awt.Insets[top=8,left=10,bottom=8,right=10]
+  [PASS] 内边距在 8~10px 量级  ->  java.awt.Insets[top=8,left=10,bottom=8,right=10]
+  [PASS] JTextPane.getInsets() 确实反映出内边距（排版真的让开了）  ->  java.awt.Insets[top=8,left=10,bottom=8,right=10]
+  [PASS] margin 已清零，内外边距不会叠成两层  ->  java.awt.Insets[top=0,left=0,bottom=0,right=0]
+  [info] 改动前竖直滚动条首选宽度 = 12px（UIManager ScrollBar.width）
+  [PASS] 竖直滚动条首选宽度 <= 10px  ->  8px（改动前 12px）
+  [PASS] UIManager 的 ScrollBar.width 也收窄了  ->  8px
+  [PASS] 滚动条 unitIncrement 保持为正（滚轮/键盘可用）  ->  16
+  [info] 改动前：日志区背景 #3C4150，窗口/上半部背景 #282C34（明显两块）
+  [info] 现在　：日志区 #FF282C34，窗口内容 #FF282C34，上半部 #FF282C34，视口 #FF282C34
+  [PASS] 日志区背景与窗口内容背景一致/极接近  ->  #FF282C34 vs #FF282C34（最大通道差 0）
+  [PASS] 与上半部状态区背景也是同一块底色  ->  #FF282C34 vs #FF282C34
+  [PASS] 视口背景同样融合  ->  #FF282C34 vs #FF282C34
+  [PASS] 背景是我们自己设的普通 Color，FlatLaf 不会再改回去  ->  java.awt.Color
+  [PASS] 统一前景色在融合后的背景上对比度 >= 4.5:1  ->  #FF979FAD on #FF282C34 = 5.25:1
+
+== 9. 日志区拿到焦点也不描边
+  [info] FlatLaf 的 Component.focusWidth = 2（>0 时 FlatBorder 会画焦点描边，这正是改动前那圈蓝色的来源）
+  [PASS] 日志区确实拿到了焦点（真的触发了焦点路径）
+  [PASS] 拿到焦点后 JScrollPane 仍然没有边框（无蓝色描边）  ->  null
+  [PASS] 焦点前后 JScrollPane 边框都是空  ->  null -> null
+  [PASS] 焦点前后 JTextPane 的 EmptyBorder 是同一个实例（没有被换成描边）  ->  javax.swing.border.EmptyBorder insets=java.awt.Insets[top=8,left=10,bottom=8,right=10] -> javax.swing.border.EmptyBorder insets=java.awt.Insets[top=8,left=10,bottom=8,right=10]
+  [PASS] FlatLaf 客户端属性 JComponent.outline 为空（不会触发错误/警告描边）
+  [PASS] 没有额外的 FlatLaf styleClass 会给日志区加样式
+
+== 10. 多行日志对齐与前缀
+  [PASS] 多行内容已渲染
+  [PASS] 多行日志的第二行用等宽空白缩进，与第一行正文左对齐  ->  第一行正文列=23，第二行列=23
+  [PASS] 第二行不再重复打印等级前缀  ->  「                       多行样例第二行」
+  [PASS] 带 indent 的日志已渲染
+  [PASS] indent 前缀原样显示  ->  「16:12:06.670 [ INFO  ] 更新源选择 缩进样例行」
+
+== 11. 限行数 2000
+  [PASS] 5000 行全部投递完毕
+  [PASS] 内部行数与上限一致  ->  logLineCount=2000
+  [PASS] 文档里实际也是 2000 行  ->  actual=2000
+  [PASS] 最新的日志还在
+  [PASS] 最旧的日志已经被丢掉
+  [PASS] 丢弃旧行并继续追加之后，仍然贴在底部
+  [PASS] 最后一行依然可见
+  [PASS] 限行裁剪之后前景色依然只有一种  ->  [#FF979FAD]
+
+== 12. 突发日志不卡 UI
+  [PASS] 8000 条日志全部渲染完成
+  [info] 8000 条日志渲染耗时 947ms，EDT 最大响应延迟 131ms
+  [PASS] 8000 条日志渲染没有慢到不可接受  ->  947ms
+  [PASS] 灌日志期间 EDT 没有被长时间占住（不卡顿）  ->  131ms
+  [PASS] 限行数在突发场景下依然成立
+
+== 13. 窗口缩放，日志区跟着变大
+  [info] 日志区高度 334 -> 534，上半部高度 100 -> 100
+  [PASS] 日志区高度跟着窗口一起变大
+  [PASS] 上半部信息区高度基本不变（多出来的高度都给了日志区）
+  [PASS] 缩放之后仍然贴在底部
+
+== 14. 浅色主题下也能看清（disable-theme 场景）
+  [info] 浅色主题下日志区背景 #FFEEEEEE，前景色 #FF333333，窗口内容背景 #FFEEEEEE
+  [PASS] 日志区背景确实是浅色  ->  #FFEEEEEE
+  [PASS] 统一前景色自动换成深色，不会白底白字  ->  #FF333333
+  [PASS] 浅色主题下对比度仍然 >= 4.5:1  ->  10.89:1
+  [PASS] 组件前景色与字符属性仍然同色  ->  #FF333333
+  [PASS] 浅色主题下日志区背景同样与窗口融合  ->  #FFEEEEEE vs #FFEEEEEE
+
+结果：通过 107 项，失败 0 项
+报告已写入 C:\Users\一只屑\Desktop\ModSync\Mcpatch2JavaClient\tests\gui\harness-report.txt

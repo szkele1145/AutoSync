@@ -275,6 +275,38 @@ python tools/check-mcdr-package.py
 
 ---
 
+## 来源与致谢
+
+AutoSync 不是从零开始的，它站在一个成熟项目的肩上：
+
+| 部分 | 来源 |
+|---|---|
+| **客户端（javaagent）** | 基于 **[BalloonUpdate/McPatch2](https://github.com/BalloonUpdate/McPatch2)** 的 Java 客户端改造 —— 保留了它的多源协议框架（HTTP / WebDAV / Alist）、清单格式与整体更新流程 |
+| **服务端（Python / MCDR 双版本）** | 本项目独立实现 |
+| **MSFP 协议** | 本项目自研（裸 TCP，见 [docs/MSFP协议.md](docs/MSFP协议.md)） |
+| **构建与部署工具** | 本项目原创 |
+
+### 在 McPatch2 基础上做的改动（客户端）
+
+- **新增 MSFP 裸 TCP 协议支持** —— 原项目走 HTTP，而国内云服务器的 HTTP 会被 ICP 备案拦截（返回"未备案"提示页），裸 TCP 可以正常穿透
+- **镜像模式** —— 客户端 `mods/` 强制与服务端清单完全一致，清单外的文件移到 `.modsync-removed/` 备份而不是直接删除
+- **CDN / 服务端自动测速选源** —— 每次同步开始时实测两方速度：差距不大就优先走 CDN（省服务器带宽），CDN 明显慢则提升分块线程重测一次，仍慢则改用服务端
+- **图形窗口实时日志** —— 边同步边滚动显示，可拖分隔条调整比例
+- **多线程分块下载** —— 单文件多线程分块 + 多文件并发
+- **modId 冲突检测** —— 解析 `neoforge.mods.toml`，自动禁用与服务器模组重复的玩家自加模组
+
+### 服务端与协议
+
+Python 独立版、MCDR 插件版、MSFP 协议、清单生成、模组分类、依赖检查、CDN 兜底下载等**均为本项目原创实现**。
+
+> 感谢 [BalloonUpdate](https://github.com/BalloonUpdate) 开源 [McPatch2](https://github.com/BalloonUpdate/McPatch2) —— 没有它就没有这个项目。
+> 原项目文档：[McPatchDocs](https://balloonupdate.github.io/McPatchDocs/)
+
+---
+
 ## 许可证
 
-[MIT](LICENSE)
+[MIT](LICENSE)。
+
+客户端基于 [McPatch2](https://github.com/BalloonUpdate/McPatch2) 改造，其原始版权归 BalloonUpdate 所有（MIT）；本项目对客户端所做的修改、以及服务端、协议与工具部分，版权归 AutoSync contributors 所有。
+

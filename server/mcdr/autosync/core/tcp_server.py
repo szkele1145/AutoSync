@@ -8,18 +8,27 @@
     GET <start> <end> <path>\\n     # 闭区间偏移，end=-1 表示到文件末尾
     PING\\n                          # -> OK 0\\n
     SIZE <path>\\n                   # -> OK <size>\\n
+    REPORT <token> <length>\\n       # 后跟 length 字节 UTF-8 JSON（默认关闭，见 side_report）
+    <length 字节 JSON>
 
 响应::
 
     OK <length>\\n + <length> 字节原始数据
+    OK <count>\\n                    # REPORT 成功：报告里 mods 数组的条目数
     ERR <message>\\n                # not found / forbidden / bad request / internal <detail>
+                                    # / unauthorized / disabled / too large
 
 其他要求：单连接 keep-alive（串行，不流水线）、支持并发连接（客户端每块一个连接）、
 空闲 30 秒断开、必须做路径规范化拒绝逃逸（``..`` / 绝对路径 / 符号链接逃逸）。
+
+``REPORT`` 是给配套工具 ModSideDetector 上报 ``side-report.json`` 用的（默认关闭）。
+它对 ``GET`` / ``PING`` / ``SIZE`` 零影响：只是 :meth:`AutoSyncTCPHandler._dispatch`
+里多一个动词分支，共用同一个 accept 循环与连接（不新开端口、不引入 HTTP）。
 """
 
 from __future__ import annotations
 
+import json
 import re
 import socket
 import socketserver
@@ -29,6 +38,8 @@ import traceback
 import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+from .side_report import SideReportReceiver, token_matches
 
 __all__ = [
     "PROTOCOL_NAME",
@@ -44,6 +55,9 @@ PROTOCOL_NAME = "MSFP/1"
 MAX_LINE = 8192
 IDLE_TIMEOUT = 30.0
 READ_CHUNK = 256 * 1024
+#: REPORT 出错时最多丢弃多少字节的 body：丢弃只是为了让 ``ERR`` 可靠送达
+#: （socket 接收缓冲里有未读数据时 close() 会发 RST），不是为了把数据读进来
+REPORT_DISCARD_LIMIT = 32 * 1024 * 1024
 _DRIVE_RE = re.compile(r"^[A-Za-z]:")
 
 
@@ -227,6 +241,9 @@ class AutoSyncTCPHandler(socketserver.StreamRequestHandler):
         if verb == "GET":
             return self._handle_get(rest)
 
+        if verb == "REPORT":
+            return self._handle_report(rest)
+
         # 兼容性要求：不是 GET/PING/SIZE 开头的连接 -> ERR bad request 并关闭
         self._send_err("bad request")
         return False
@@ -302,6 +319,124 @@ class AutoSyncTCPHandler(socketserver.StreamRequestHandler):
             return False
         return True
 
+    # ------------------------------------------------------------------ REPORT
+    def _handle_report(self, rest: str) -> bool:
+        """``REPORT <token> <length>\\n`` + ``length`` 字节 JSON：接收 side-report 上报。
+
+        :return: ``False`` = 响应后关闭连接。**错误一律关连接**：body 可能还残留在
+                 管道里（认证失败/超限时我们不会把它读进来），留着连接会让后续字节被
+                 误当成新的请求行，导致协议失步。成功则与 ``GET`` / ``SIZE`` 一样保持
+                 keep-alive。
+
+                 关连接前会把未读的 body **丢弃式**读掉（不缓存，见 :meth:`_discard_body`）：
+                 否则 close() 时内核看到接收缓冲还有数据会发 RST，客户端可能读不到
+                 刚发出去的 ``ERR``。
+        """
+        receiver = getattr(self.server, "side_report", None)
+        fields = rest.split(" ")
+        if len(fields) != 2 or not fields[0] or not fields[1].isdigit():
+            # 缺参数 / 令牌里带了空格 / 长度不是十进制非负整数（长度未知，无法安全丢弃）
+            self._send_err("bad request")
+            return False
+        token, length_text = fields
+        length = int(length_text)
+
+        if receiver is None or not receiver.accepting:
+            # 功能关闭，或开关开着但没配令牌：绝不能落盘（丢弃 body 也不缓存）
+            self._discard_body(length)
+            self._send_err("disabled")
+            return False
+        if length > receiver.max_body_bytes:
+            # 先看 length 再决定读多少：超限直接拒绝，绝不把 body 读进内存
+            self._discard_body(length)
+            self._send_err("too large", key="too_large")
+            return False
+        if not token_matches(token, receiver.token):
+            self._discard_body(length)
+            self._send_err("unauthorized")
+            return False
+
+        body = self._read_body(length)
+        if body is None:
+            # 半包读到一半超时 / 对端断开：干净收场，不让服务端线程卡死
+            self._send_err("bad request")
+            return False
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            self._send_err("bad request")
+            return False
+        if not isinstance(payload, dict) or not isinstance(payload.get("mods"), list):
+            # 最小结构校验：必须是对象且 mods 是数组，校验不过绝不落盘
+            self._send_err("bad request")
+            return False
+
+        try:
+            saved = receiver.save(payload, source=self._client_ip())
+        except OSError as exc:
+            self._send_err("internal {}".format(str(exc).replace("\n", " ")[:200]))
+            return False
+
+        count = len(payload["mods"])
+        self._bump("reports")
+        receiver.log(
+            "info",
+            "MSFP 已接收 side-report 上报：{} 条，来源 {}，已原子写入 {}"
+            "（下次 classify 将使用这份新报告）".format(count, self._client_ip(), saved),
+        )
+        self._send_line("OK {}".format(count))
+        return True
+
+    def _read_body(self, length: int) -> Optional[bytes]:
+        """精确读 ``length`` 字节。
+
+        TCP 是字节流：一次 ``read`` 可能只拿到半包，必须循环读到足量或出错为止。
+        返回 ``None`` 表示超时 / 半包 / 对端断开（调用方按 ``bad request`` 收场）。
+        """
+        if length <= 0:
+            return b""
+        chunks: List[bytes] = []
+        remaining = length
+        while remaining > 0:
+            try:
+                chunk = self.rfile.read(min(remaining, READ_CHUNK))
+            except (socket.timeout, TimeoutError):
+                self._bump("errors_report_timeout")
+                return None
+            except OSError:
+                return None
+            if not chunk:
+                return None
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        return b"".join(chunks)
+
+    def _discard_body(self, length: int) -> None:
+        """丢弃式读掉 ``length`` 字节（**不缓存**，因此不会吃内存）。
+
+        为什么需要：错误响应后要关连接，而 socket 接收缓冲里若还有未读数据，
+        ``close()`` 会让内核发 RST，客户端可能因此读不到刚发出去的 ``ERR``。
+        先把这些字节丢掉，``ERR`` 才能可靠送达。
+
+        恶意客户端可以声明一个巨大长度却不发数据，所以最多丢
+        :data:`REPORT_DISCARD_LIMIT` 字节，且读操作受连接的 idle 超时保护，
+        绝不会让线程卡死。
+        """
+        remaining = min(int(length), REPORT_DISCARD_LIMIT)
+        while remaining > 0:
+            try:
+                chunk = self.rfile.read(min(remaining, READ_CHUNK))
+            except (socket.timeout, TimeoutError, OSError):
+                return
+            if not chunk:
+                return
+            remaining -= len(chunk)
+
+    def _client_ip(self) -> str:
+        """对端 IP（日志用）。"""
+        address = getattr(self, "client_address", None)
+        return str(address[0]) if address else ""
+
     # ------------------------------------------------------------------ 辅助
     def _find_file(self, raw_path: str) -> Path:
         candidates = resolve_candidates(
@@ -324,9 +459,10 @@ class AutoSyncTCPHandler(socketserver.StreamRequestHandler):
     def _send_line(self, text: str) -> None:
         self.wfile.write(text.encode("utf-8") + b"\n")
 
-    def _send_err(self, message: str) -> None:
-        key = message.split(" ", 1)[0]
-        self._bump("errors_" + key.replace("-", "_"))
+    def _send_err(self, message: str, key: Optional[str] = None) -> None:
+        # ``key`` 只影响统计键名（``too large`` 这种带空格的错误消息取首词不好看）
+        stat_key = key or message.split(" ", 1)[0].replace("-", "_")
+        self._bump("errors_" + stat_key)
         self._send_line("ERR " + message)
 
     def _bump(self, key: str, amount: int = 1) -> None:
@@ -349,11 +485,14 @@ class AutoSyncTCPServer(socketserver.ThreadingTCPServer):
         logger: Any = None,
         path_prefix: str = "",
         idle_timeout: float = IDLE_TIMEOUT,
+        side_report: Optional[SideReportReceiver] = None,
     ) -> None:
         self.dist_dir = Path(dist_dir)
         self.autosync_logger = logger
         self.path_prefix = path_prefix
         self.idle_timeout = float(idle_timeout)
+        #: side-report 上报接收器（``None`` = 未启用；REPORT 一律回 ERR disabled）
+        self.side_report = side_report
         self.stats: Dict[str, Any] = {
             "connections": 0,
             "active_connections": 0,
@@ -363,6 +502,7 @@ class AutoSyncTCPServer(socketserver.ThreadingTCPServer):
             "ranged_gets": 0,
             "bytes_sent": 0,
             "idle_timeouts": 0,
+            "reports": 0,
             "errors_not_found": 0,
             "errors_forbidden": 0,
             "errors_bad": 0,
@@ -390,6 +530,7 @@ class AutoSyncTCPService:
         logger: Any = None,
         path_prefix: str = "",
         idle_timeout: float = IDLE_TIMEOUT,
+        side_report: Optional[SideReportReceiver] = None,
     ) -> None:
         self.dist_dir = Path(dist_dir)
         self.host = host
@@ -397,6 +538,8 @@ class AutoSyncTCPService:
         self.logger = logger
         self.path_prefix = path_prefix
         self.idle_timeout = float(idle_timeout)
+        #: side-report 上报接收器（``None`` = 未启用）
+        self.side_report = side_report
         self._server: Optional[AutoSyncTCPServer] = None
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.RLock()
@@ -404,6 +547,12 @@ class AutoSyncTCPService:
         self.started_at: float = 0.0
 
     # ------------------------------------------------------------------ 属性
+    def set_side_report(self, receiver: Optional[SideReportReceiver]) -> None:
+        """换掉上报接收器（reload / restart 换了配置时由 AutoSyncCore 调用）。"""
+        with self._lock:
+            self.side_report = receiver
+            if self._server is not None:
+                self._server.side_report = receiver
     @property
     def running(self) -> bool:
         return self._server is not None and self._thread is not None and self._thread.is_alive()
@@ -439,6 +588,7 @@ class AutoSyncTCPService:
                     logger=self.logger,
                     path_prefix=self.path_prefix,
                     idle_timeout=self.idle_timeout,
+                    side_report=self.side_report,
                 )
             except OSError as exc:
                 self.last_error = str(exc)
@@ -454,6 +604,7 @@ class AutoSyncTCPService:
             thread.start()
             self.last_error = ""
             self._log("info", f"MSFP 服务已启动：{self.endpoint()}（目录 {self.dist_dir}）")
+            self._log_side_report()
             return True
 
     def stop(self) -> None:
@@ -483,3 +634,26 @@ class AutoSyncTCPService:
         if self.logger is None:
             return
         getattr(self.logger, level, self.logger.info)(message)
+
+    def _log_side_report(self) -> None:
+        """上报接口的状态日志。
+
+        「开关打开但没配令牌」必须明确说出来：那时 REPORT 一律 ``ERR disabled``，
+        用户要能从日志里知道原因，而不是以为接口已经在收报告。
+        """
+        receiver = self.side_report
+        if receiver is None or not getattr(receiver, "enabled", False):
+            return
+        if getattr(receiver, "accepting", False):
+            self._log(
+                "info",
+                "side-report 上报已启用（MSFP REPORT 命令，与文件分发共用 {}）：落盘 {}".format(
+                    self.endpoint(), getattr(receiver, "path", "")
+                ),
+            )
+        else:
+            self._log(
+                "warning",
+                "side_report_enabled=true 但 side_report_token 为空：REPORT 一律回 ERR disabled"
+                "（没配令牌不会接收任何上报，也不会写文件）",
+            )

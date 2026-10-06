@@ -99,6 +99,31 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # 报 Missing or unsupported mandatory dependencies 崩游戏。
     # 多发给客户端一个纯服务端 mod 顶多是启动警告，漏掉一个前置就是崩游戏 —— 代价不对等。
     "classify_move_pure_server": False,
+    # 配套工具 ModSideDetector 生成的 side-report.json：它逐个 jar 给出 client/server/both/unknown
+    # 的侧别判定与置信度（综合 Modrinth + mcmod + 启发式），比 Modrinth 里 mod 作者自填的
+    # client_side / server_side 更可信。classify 会**优先**采用它，命中后**不再查 Modrinth**
+    # （省请求、更准）；未命中的条目照旧走原有的 Modrinth -> TOML 兜底流程。
+    #   ""                      -> 自动探测 <dist_dir>/mods/side-report.json（存在才用；
+    #                              文件不存在 / 读取失败时行为与本功能引入前完全一致）
+    #   "none"/"off"/"disabled" -> 关闭该功能（行为完全等同改造前）
+    #   其它（相对路径）        -> 相对 <dist_dir> 解析，例如 "mods/side-report.json"
+    #   绝对路径                -> 直接使用
+    "classify_side_report": "",
+    # ---- ModSideDetector 网络上报（MSFP REPORT 命令）----
+    # 配套工具 ModSideDetector 能用 MSFP 的 REPORT 命令把 side-report.json 直接推上来，
+    # 省掉人工拷贝（工具与服务端不在同一台机器时尤其有用）。它**不新开端口、不引入
+    # HTTP**：复用 tcp_host / tcp_port 与同一个 accept 循环（阿里云大陆节点会按 Host 头
+    # 拦 HTTP，只有裸 TCP 通）。
+    #   REPORT <token> <length>\n + length 字节 JSON  ->  OK <条目数> / ERR <原因>
+    # 开关默认 **false**（关闭）：关闭时 REPORT 一律回 ERR disabled，行为与改造前一致。
+    "side_report_enabled": False,
+    # 共享令牌（单行、不含空格）。**为空时即使开关打开也一律回 ERR disabled**：
+    # 绝不允许「没配令牌就能往磁盘写文件」。比较用 hmac.compare_digest（防时序侧信道）。
+    "side_report_token": "",
+    # 报告落盘路径：留空 = <data_dir>/side-report.json；相对路径相对 data_dir 解析。
+    # classify 在 classify_side_report 留空（自动探测）且 <dist_dir>/mods/side-report.json
+    # 不存在时，会回退到这里 —— 所以默认值下「上报完就能被 classify 读到」。
+    "side_report_path": "",
     # ---- 依赖检查（shell: deps）----
     # build 完成后是否自动跑一次依赖检查（只读、不阻断 build；有缺失前置就醒目告警）
     "deps_check_after_build": False,
@@ -170,6 +195,15 @@ class AutoSyncConfig:
     classify_backup: bool = True
     classify_unknown_as: str = "both"
     classify_move_pure_server: bool = False
+    #: ModSideDetector 的 side-report.json 路径（"" = 自动探测 <dist_dir>/mods/side-report.json；
+    #: "none"/"off"/"disabled" = 关闭；相对路径相对 dist_dir 解析）
+    classify_side_report: str = ""
+    #: MSFP REPORT 上报开关（默认关；关闭时 REPORT 一律 ERR disabled）
+    side_report_enabled: bool = False
+    #: 上报共享令牌（为空时即使开关打开也一律 ERR disabled）
+    side_report_token: str = ""
+    #: 上报落盘路径（"" = <data_dir>/side-report.json；相对路径相对 data_dir）
+    side_report_path: str = ""
     deps_check_after_build: bool = False
     deps_fix_enabled: bool = True
     deps_fix_game_version: str = "1.21.1"
@@ -249,6 +283,12 @@ class AutoSyncConfig:
             self.classify_unknown_as, ("both", "none"), DEFAULT_CONFIG["classify_unknown_as"]
         )
         self.classify_move_pure_server = bool(self.classify_move_pure_server)
+        # side-report 路径：只 strip；"none"/"off"/"disabled" 的关闭语义由 classify 解释
+        self.classify_side_report = str(self.classify_side_report or "").strip()
+        # 网络上报（REPORT）：开关默认关；令牌/路径只 strip，为空时的语义由 side_report 解释
+        self.side_report_enabled = bool(self.side_report_enabled)
+        self.side_report_token = str(self.side_report_token or "").strip()
+        self.side_report_path = str(self.side_report_path or "").strip()
         self.deps_check_after_build = bool(self.deps_check_after_build)
         self.deps_fix_enabled = bool(self.deps_fix_enabled)
         self.deps_fix_game_version = str(self.deps_fix_game_version or "1.21.1").strip() or "1.21.1"
@@ -301,6 +341,10 @@ class AutoSyncConfig:
             "classify_backup": self.classify_backup,
             "classify_unknown_as": self.classify_unknown_as,
             "classify_move_pure_server": self.classify_move_pure_server,
+            "classify_side_report": self.classify_side_report,
+            "side_report_enabled": self.side_report_enabled,
+            "side_report_token": self.side_report_token,
+            "side_report_path": self.side_report_path,
             "deps_check_after_build": self.deps_check_after_build,
             "deps_fix_enabled": self.deps_fix_enabled,
             "deps_fix_game_version": self.deps_fix_game_version,

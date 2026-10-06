@@ -26,6 +26,7 @@ server/python/
 │   ├── speedtest.py         512KB 测速文件生成
 │   ├── tcp_server.py        MSFP v1 服务端
 │   ├── tcp_client.py        MSFP v1 客户端（自检用）
+│   ├── side_report.py       ModSideDetector 上报接收（MSFP REPORT 命令，默认关闭）
 │   ├── builder.py           构建编排 / 状态缓存 / 定时轮询
 │   ├── theme.py             QBM 风格输出主题
 │   ├── classify.py          模组分类与搬运
@@ -78,6 +79,10 @@ python3 -m autosync --base .. status     # 第一次运行顺手生成 config.js
 | `auto_build_on_start` | `false` | 启动时自动构建一次 |
 | `allow_empty_dist` | `false` | 目录为空时是否仍生成空清单；**保持 false** 防止误清空客户端 |
 | `classify_server_mods_dir` | `../mods` | 服务端 mods 目录（相对 `dist_dir`） |
+| `classify_side_report` | `""` | ModSideDetector 的 `side-report.json`：空 = 自动探测 `<dist_dir>/mods/side-report.json`；`none`/`off`/`disabled` = 关闭该功能；相对路径相对 `dist_dir` 解析 |
+| `side_report_enabled` | `false` | 是否允许配套工具通过 MSFP 的 **`REPORT`** 命令网络上报 `side-report.json`（**默认关**，不新开端口，与分发共用 `tcp_host`/`tcp_port`） |
+| `side_report_token` | `""` | 上报共享令牌（单行、不含空格）。**开关打开但留空时，`REPORT` 一律回 `ERR disabled`** |
+| `side_report_path` | `""` | 上报报告的落盘路径：空 = `<data_dir>/side-report.json`；相对路径相对 `data_dir` 解析 |
 | `deps_fix_game_version` / `deps_fix_loader` | `1.21.1` / `neoforge` | 自动补前置时筛版本 |
 | `curseforge_api_key` | `""` | 留空则用免 key 的 CFWidget 兜底 |
 | `http_proxy` | `""` | 出站 HTTP 代理（`http://host:port`） |
@@ -107,6 +112,51 @@ python3 -m autosync --base .. status     # 第一次运行顺手生成 config.js
 | --- | --- |
 | `... classify [--refresh]` | **干跑**：分析 `client-dist/mods` 里哪些是纯客户端 / 双端 / 纯服务端 / 待定，**不改动任何文件** |
 | `... classify-apply` | 按上一次 classify 的结果搬运（双端复制；纯服务端默认也只复制） |
+
+> **优先采用 ModSideDetector 的判定**：配套工具 ModSideDetector 跑完会导出 `side-report.json`。
+> 把它放到 `<dist_dir>/mods/side-report.json`（或用 `classify_side_report` 指定路径），`classify` 就会
+> **优先**读它（先按 **sha1** 精确匹配、sha1 缺失时按文件名匹配），命中即采用它的
+> `client`/`server`/`both`/`unknown` 结论，并**跳过 Modrinth 查询**（省请求、也比 mod 作者自填的
+> `client_side` 准）。报告里会带上原始的 `confidence` 与 `notes`，`low` 置信或标了
+> `needs_review`/`conflict` 的条目仍然采用、但标注「建议人工复核」。
+> 文件不存在、损坏或字段不合法时会被忽略并记一条 warning，行为与没有这个功能时完全一致；
+> 未命中的 mod 照旧走 Modrinth -> TOML 兜底。
+
+#### 4.2.1 让 ModSideDetector 直接网络上报（可选，默认关闭）
+
+工具在另一台机器上时，手工拷贝 `side-report.json` 很麻烦。打开 `side_report_enabled` 后，
+ModSideDetector 可以**复用同一个 MSFP 端口**（`tcp_host`/`tcp_port`，不需要额外放行端口，
+也不引入 HTTP —— 国内节点的 HTTP 会被备案拦截，裸 TCP 不受影响）用 `REPORT` 命令把报告推上来：
+
+```
+REPORT <token> <length>\n
+<length 字节的 UTF-8 JSON（side-report.json 全文）>
+
+-> OK 5\n                 成功，数字 = 报告里 mods 的条目数
+-> ERR unauthorized\n     令牌不匹配
+-> ERR disabled\n         功能关闭，或没配 side_report_token
+-> ERR too large\n        超过 32 MB 上限
+-> ERR bad request\n      格式错误 / JSON 不合法 / mods 不是数组
+-> ERR internal <xxx>\n   落盘失败
+```
+
+三步用起来：
+
+1. 在 `config.json` 里设 `"side_report_enabled": true` 和 `"side_report_token": "自己挑的长随机串"`，
+   然后 `reload`（MCDR）或重启（独立版）。
+2. 工具端按上面的报文发一次；报告会**原子写入** `side_report_path`
+   （默认 `<data_dir>/side-report.json`，独立版 `data_dir` 就是 `--data` 指定的目录，
+   例如 `./autosync-data/`）。
+3. 跑 `classify`：`classify_side_report` 留空（自动探测）时，若 `<dist_dir>/mods/side-report.json`
+   不存在，就会自动读上报来的那份 —— **上报完不需要手动改任何配置**。
+
+> 安全默认：`side_report_enabled` 默认 `false`；即使打开，**`side_report_token` 为空时
+> `REPORT` 一律回 `ERR disabled`**（绝不允许「没配令牌就能往磁盘写文件」）。
+> 令牌用 `hmac.compare_digest` 比较，避免时序侧信道；报告只做最小校验（顶层是对象、`mods` 是数组），
+> 校验不过**不落盘**。收到报告**不会自动跑 classify**，只写一条日志提示下次 classify 会用它。
+>
+> 与 `classify_side_report` 的关系：显式配置过 `classify_side_report` 时**只认它**，
+> 上报路径只作为「自动探测」时的回退，绝不覆盖用户配置。
 
 ### 4.3 依赖检查与自动补前置
 

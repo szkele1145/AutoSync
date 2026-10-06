@@ -57,6 +57,8 @@ manifest.json + 文件  --MSFP v1（裸 TCP）-->  玩家客户端 mods/
 
 **为什么不用 HTTP**：服务端在国内云节点上，未备案域名的 HTTP 流量会被按 Host 头拦截（返回 403 / `Non-compliance ICP Filing`）；裸 TCP 不受影响。所以 AutoSync 直接用原始 TCP 自己定了一个极简协议 **MSFP v1**（`PING` / `SIZE` / `GET <start> <end> <path>`），由 frp 之类的 TCP 隧道暴露到公网。协议细节见 [docs/MSFP协议.md](docs/MSFP协议.md)。
 
+协议里还有一条**默认关闭**的 `REPORT` 命令：配套工具 **ModSideDetector** 可以用它把 `side-report.json` 直接推到服务端（复用同一个端口，不新开监听），详见 [docs/服务端-Python版.md 4.2.1](docs/服务端-Python版.md)。
+
 客户端在同步开始时还会做两件事：
 
 * **多源测速**：`urls` 里可以写多个源，客户端并发测速后选最快的（结果缓存 `source-cache-seconds` 秒）；
@@ -199,6 +201,10 @@ AutoSync/
 | `classify_enabled` | `true` | 是否启用模组分类 |
 | `classify_server_mods_dir` | `../mods` | 服务端 mods 目录（相对 `dist_dir`） |
 | `classify_move_pure_server` | `false` | 纯服务端模组是否从分发目录**移走**（默认只复制） |
+| `classify_side_report` | `""` | 配套工具 **ModSideDetector** 的 `side-report.json`：空 = 自动探测 `<dist_dir>/mods/side-report.json`；命中即优先采用并跳过 Modrinth 查询；`none`/`off`/`disabled` = 关闭；相对路径相对 `dist_dir` 解析 |
+| `side_report_enabled` | `false` | 是否允许 ModSideDetector 通过 MSFP `REPORT` 命令**网络上报** `side-report.json`（默认关；与分发共用 `tcp_host`/`tcp_port`，不新开端口） |
+| `side_report_token` | `""` | 上报共享令牌（单行、不含空格）。**打开开关但留空时 `REPORT` 一律回 `ERR disabled`** |
+| `side_report_path` | `""` | 上报报告的落盘路径：空 = `<data_dir>/side-report.json`；相对路径相对 `data_dir` 解析 |
 | `deps_check_after_build` | `false` | 构建后是否自动跑一次依赖检查 |
 | `deps_fix_enabled` | `true` | 是否允许自动下载缺失前置 |
 | `deps_fix_game_version` | `1.21.1` | 目标游戏版本（选前置版本用） |

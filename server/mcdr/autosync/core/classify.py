@@ -1,4 +1,4 @@
-﻿"""模组分类与搬运（``classify`` / ``classify apply``）。
+"""模组分类与搬运（``classify`` / ``classify apply``）。
 
 服主的「客户端分发目录」``<dist_dir>``（默认 ``server/client-dist``）下的 ``mods/`` 里
 混了三类模组，本模块负责判定并把服务端真正需要的那部分搬到 ``<server>/mods``：
@@ -24,16 +24,25 @@ Modrinth 的 ``client_side`` 由 mod 作者自行填写、经常不准，多发�
 它就**永远不会被移走**，即使被判定为纯服务端、即使开了 ``classify_move_pure_server``；
 报告里标注「被 N 个 mod 依赖，已强制保留」。
 
-判定主来源是 Modrinth（sha1 -> project_id -> client_side / server_side），
-查不到时兜底读 jar 内 ``META-INF/neoforge.mods.toml``：
+判定优先级（配置项 ``classify_side_report``，默认自动探测 ``<dist_dir>/mods/side-report.json``）：
+
+1. **ModSideDetector 的 ``side-report.json``**（配套工具生成，综合 Modrinth + mcmod + 启发式）：
+   按 **sha1 精确匹配**优先、sha1 缺失时按文件名 ``file`` 匹配；命中即采用该结论并**跳过
+   Modrinth 查询**。``confidence=low`` 或 ``needs_review`` / ``conflict`` 为 true 的条目
+   **仍然采用**，但报告里标注「建议人工复核」。文件不存在 / 损坏 / 字段不合法时，行为与
+   没有这个功能时**完全一致**（只多一个为 0 的统计字段）。
+2. Modrinth（sha1 -> project_id -> client_side / server_side），查不到时兜底读 jar 内
+   ``META-INF/neoforge.mods.toml``：
 
 * ``clientSideOnly = true`` -> 纯客户端；
 * ``displayTest = "IGNORE_ALL_VERSION"`` -> **不确定**（纯客户端和纯服务端都可能这么写，
   绝不猜），列为待定；
 * ``[[dependencies]]`` 里的 ``side="CLIENT"/"SERVER"`` 只描述依赖，**不用于判定 mod 自身**。
 
-报告透明性：判为纯服务端的条目会带上 Modrinth 返回的**原始** ``client_side`` /
-``server_side`` 值与 ``project_id``，便于人工复核（上次事故就是因为看不到原始依据）。
+报告透明性：判为纯服务端的条目会带上**原始**依据 —— Modrinth 来源是它返回的
+``client_side`` / ``server_side`` 值与 ``project_id``，side-report 来源是 ModSideDetector 的
+``side`` / ``confidence`` / ``notes`` 原文（``entry.detail`` 里完整保留，不截断），
+便于人工复核（上次事故就是因为看不到原始依据）。
 
 安全约定：
 * :meth:`ClassifyService.analyze` 只读不写（除报告 JSON），绝不改动分发目录；
@@ -78,6 +87,8 @@ from .modrinth import (
     parse_cached_projects,
 )
 from .scanner import hash_file, iter_files, snapshot_key
+#: MSFP ``REPORT`` 上报的落盘位置（工具通过网络推过来的报告可能在这里）
+from .side_report import resolve_side_report_path as resolve_side_report_upload_path
 
 __all__ = [
     "CATEGORY_CLIENT_ONLY",
@@ -88,6 +99,12 @@ __all__ = [
     "SOURCE_MODRINTH",
     "SOURCE_TOML",
     "SOURCE_UNKNOWN",
+    "SOURCE_SIDE_REPORT",
+    "SIDE_REPORT_CATEGORY",
+    "SIDE_REPORT_OFF_VALUES",
+    "SideReportEntry",
+    "resolve_side_report_path",
+    "load_side_report",
     "ACTION_KEEP",
     "ACTION_COPY",
     "ACTION_MOVE",
@@ -121,6 +138,20 @@ CATEGORY_LABELS = {
 SOURCE_MODRINTH = "modrinth"
 SOURCE_TOML = "toml"
 SOURCE_UNKNOWN = "unknown"
+#: 判定来自配套工具 ModSideDetector 的 ``side-report.json``（**不复用** SOURCE_MODRINTH：
+#: 报告里必须一眼看出这条结论不是 Modrinth 自填的 side 字段）
+SOURCE_SIDE_REPORT = "modsidedetector"
+
+#: side-report.json 的 ``side`` -> 本模块的 category
+SIDE_REPORT_CATEGORY = {
+    "client": CATEGORY_CLIENT_ONLY,
+    "server": CATEGORY_SERVER_ONLY,
+    "both": CATEGORY_BOTH,
+    "unknown": CATEGORY_UNKNOWN,
+}
+
+#: ``classify_side_report`` 里表示「关闭该功能」的取值（比较时小写）
+SIDE_REPORT_OFF_VALUES = ("none", "off", "disabled")
 
 ACTION_KEEP = "keep"
 ACTION_COPY = "copy"
@@ -200,6 +231,169 @@ def judge_toml(text: Optional[str]) -> Tuple[Optional[str], str]:
     if match is not None and match.group(1).strip().upper() == "IGNORE_ALL_VERSION":
         return CATEGORY_UNKNOWN, 'toml: displayTest="IGNORE_ALL_VERSION"（无法区分纯客户端/纯服务端）'
     return None, ""
+
+
+# ---------------------------------------------------------------- side-report 接入
+#: side-report.json 里 sha1 的合法形状（40 位十六进制）
+_SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _side_report_warn(logger: Any, message: str) -> None:
+    """side-report 的所有异常都只记日志：这个文件是可选的，绝不能让 classify 失败。"""
+    if logger is None:
+        return
+    log = getattr(logger, "warning", None) or getattr(logger, "info", None)
+    if log is not None:
+        log(message)
+
+
+@dataclass
+class SideReportEntry:
+    """``side-report.json`` 里一条**可用**的判定（只保留判定与报告要用的字段）。"""
+
+    file: str = ""
+    sha1: str = ""
+    mod_id: str = ""
+    display_name: str = ""
+    side: str = ""  # client / server / both / unknown
+    confidence: str = ""  # high / medium / low
+    notes: str = ""
+    needs_review: bool = False
+    conflict: bool = False
+
+    @property
+    def low_confidence(self) -> bool:
+        return self.confidence.strip().lower() == "low"
+
+    @property
+    def evidence(self) -> str:
+        """写进 ``entry.detail`` 的依据文字：必须带上**原始** confidence 与 notes。
+
+        （本项目上一次事故就是因为报告里看不到原始依据，所以这里不做截断。）
+        """
+        confidence = self.confidence.strip() or "(未提供)"
+        parts = f"side={self.side}, confidence={confidence}"
+        if self.mod_id.strip():
+            parts += f", mod_id={self.mod_id.strip()}"
+        notes = self.notes.strip() or "(无 notes)"
+        return f"modsidedetector({parts})：{notes}"
+
+    @property
+    def review_note(self) -> str:
+        """低置信 / 需复核时追加到 ``entry.note`` 的提示（空串 = 不需要提示）。"""
+        reasons = []
+        if self.low_confidence:
+            reasons.append("confidence=low")
+        if self.needs_review:
+            reasons.append("needs_review=true")
+        if self.conflict:
+            reasons.append("conflict=true")
+        if not reasons:
+            return ""
+        return "ModSideDetector {}，建议人工复核".format("、".join(reasons))
+
+
+def resolve_side_report_path(config: Any, dist_dir: Path) -> Tuple[Optional[Path], bool]:
+    """算出 side-report.json 的路径，返回 ``(路径, 是否是用户显式配置的)``。
+
+    * 配置为 ``"none"`` / ``"off"`` / ``"disabled"`` -> ``(None, False)`` = 功能关闭；
+    * 配置留空 -> ``<dist_dir>/mods/side-report.json``（自动探测，不算显式配置）；
+    * 相对路径 -> 相对 ``<dist_dir>`` 解析；绝对路径 -> 直接用。
+    """
+    raw = str(getattr(config, "classify_side_report", "") or "").strip()
+    if raw.lower() in SIDE_REPORT_OFF_VALUES:
+        return None, False
+    if not raw:
+        return Path(dist_dir) / "mods" / "side-report.json", False
+    expanded = Path(os.path.expanduser(raw))
+    if expanded.is_absolute():
+        return expanded, True
+    return Path(dist_dir) / expanded, True
+
+
+def _side_report_basename(value: str) -> str:
+    """取出文件名（side-report 的 ``file``/``rel_path`` 可能是带目录的路径）。"""
+    return str(value or "").replace("\\", "/").rsplit("/", 1)[-1].strip().casefold()
+
+
+def load_side_report(
+    path: Path, logger: Any = None
+) -> Tuple[Dict[str, SideReportEntry], Dict[str, SideReportEntry]]:
+    """读取并解析 side-report.json，返回 ``(按 sha1 索引, 按文件名索引)``。
+
+    容错原则：文件不存在、JSON 损坏、字段缺失、``side`` 取值不认识 —— 一律**忽略**
+    （整条记录或整个文件）并记一条 warning，**绝不抛异常**，绝不让整轮 classify 失败。
+    """
+    by_sha1: Dict[str, SideReportEntry] = {}
+    by_file: Dict[str, SideReportEntry] = {}
+    try:
+        with open(path, "r", encoding="utf-8") as fp:
+            data = json.load(fp)
+    except FileNotFoundError:
+        # 自动探测时文件不存在是常态；显式配置却不存在由调用方给出提示
+        return by_sha1, by_file
+    except (OSError, ValueError) as exc:
+        _side_report_warn(
+            logger,
+            f"side-report 读取/解析失败，已忽略该文件（照旧走 Modrinth）：{path}：{exc!r}",
+        )
+        return by_sha1, by_file
+
+    mods = data.get("mods") if isinstance(data, dict) else None
+    if not isinstance(mods, list):
+        _side_report_warn(
+            logger,
+            f"side-report 顶层缺少 mods 数组，已忽略该文件（照旧走 Modrinth）：{path}",
+        )
+        return by_sha1, by_file
+
+    skipped = 0
+    examples: List[str] = []
+
+    def skip(reason: str) -> None:
+        nonlocal skipped
+        skipped += 1
+        if len(examples) < 3:
+            examples.append(reason)
+
+    for index, item in enumerate(mods):
+        if not isinstance(item, dict):
+            skip(f"#{index} 不是对象")
+            continue
+        side = str(item.get("side") or "").strip().lower()
+        if side not in SIDE_REPORT_CATEGORY:
+            skip(f"#{index} side={item.get('side')!r} 不是 client/server/both/unknown")
+            continue
+        sha1 = str(item.get("sha1") or "").strip().lower()
+        if sha1 and not _SHA1_RE.match(sha1):
+            sha1 = ""  # 形状不对就当没有，退回按文件名匹配
+        file_name = _side_report_basename(item.get("file") or item.get("rel_path") or "")
+        if not sha1 and not file_name:
+            skip(f"#{index} sha1 与 file 都缺失")
+            continue
+        entry = SideReportEntry(
+            file=str(item.get("file") or ""),
+            sha1=sha1,
+            mod_id=str(item.get("mod_id") or ""),
+            display_name=str(item.get("display_name") or ""),
+            side=side,
+            confidence=str(item.get("confidence") or ""),
+            notes=str(item.get("notes") or ""),
+            needs_review=bool(item.get("needs_review")),
+            conflict=bool(item.get("conflict")),
+        )
+        if sha1 and sha1 not in by_sha1:
+            by_sha1[sha1] = entry
+        if file_name and file_name not in by_file:
+            by_file[file_name] = entry
+    if skipped:
+        _side_report_warn(
+            logger,
+            "side-report 有 {} 条记录字段缺失/取值不合法，已忽略（其余条目照常生效）：{}".format(
+                skipped, "；".join(examples)
+            ),
+        )
+    return by_sha1, by_file
 
 
 # ---------------------------------------------------------------- 数据结构
@@ -322,6 +516,8 @@ class ClassifyReport:
     errors: List[str] = field(default_factory=list)
     modrinth_hits: int = 0
     toml_fallbacks: int = 0
+    #: 判定来自 ModSideDetector 的 side-report.json 的条目数（旧报告无此字段，读回时默认 0）
+    side_report_hits: int = 0
     #: 被其他 mod 必需依赖的 modId 数量（这些 mod 永远不会被移走）
     protected_mod_ids: int = 0
     elapsed: float = 0.0
@@ -356,6 +552,7 @@ class ClassifyReport:
             "errors": list(self.errors),
             "modrinth_hits": self.modrinth_hits,
             "toml_fallbacks": self.toml_fallbacks,
+            "side_report_hits": self.side_report_hits,
             "protected_mod_ids": self.protected_mod_ids,
             "elapsed": round(self.elapsed, 3),
         }
@@ -378,6 +575,8 @@ class ClassifyReport:
             errors=[str(x) for x in (data.get("errors") or [])],
             modrinth_hits=int(data.get("modrinth_hits") or 0),
             toml_fallbacks=int(data.get("toml_fallbacks") or 0),
+            # 旧报告没有这个字段：默认 0（保证能读回改造前的报告）
+            side_report_hits=int(data.get("side_report_hits") or 0),
             protected_mod_ids=int(data.get("protected_mod_ids") or 0),
             elapsed=float(data.get("elapsed") or 0.0),
         )
@@ -455,6 +654,10 @@ class ClassifyService:
         self._load_cache()
         self._client = modrinth_client
         self._lock = None  # 由 entry 侧注入（可选）
+        # ModSideDetector 的 side-report.json（可选来源）：默认空 = 未命中，行为与改造前一致
+        self._side_report_by_sha1: Dict[str, SideReportEntry] = {}
+        self._side_report_by_file: Dict[str, SideReportEntry] = {}
+        self._side_report_path: Optional[Path] = None
 
     # -------------------------------------------------------------- 路径
     @property
@@ -534,6 +737,65 @@ class ClassifyService:
         if hours <= 0 or not project.queried_at:
             return False
         return (time.time() - project.queried_at) > hours * 3600
+
+    # -------------------------------------------------------------- side-report
+    def lookup_side_report(self, entry: ClassifyEntry) -> Optional[SideReportEntry]:
+        """查这个文件在 side-report 里的判定：**sha1 精确匹配优先**，缺失时按文件名兜底。"""
+        sha1 = str(entry.sha1 or "").strip().lower()
+        if sha1:
+            hit = self._side_report_by_sha1.get(sha1)
+            if hit is not None:
+                return hit
+        name = _side_report_basename(entry.name)
+        if name:
+            return self._side_report_by_file.get(name)
+        return None
+
+    def _load_side_report(self) -> None:
+        """加载 side-report.json（可选来源）。
+
+        关闭 / 文件不存在 / 解析失败时什么都不做：``_side_report_*`` 保持空，
+        整轮 classify 的行为与本功能引入前**完全一致**（只是统计字段为 0）。
+
+        ``classify_side_report`` 留空（自动探测）时多一条回退：``<dist_dir>/mods/
+        side-report.json`` 不存在就再看 MSFP ``REPORT`` 的落盘位置
+        （``side_report_path``，默认 ``<data_dir>/side-report.json``）—— 工具上报完
+        就能直接被 classify 读到。**用户显式配置过 classify_side_report 时只认它**，
+        绝不被上报路径覆盖。
+        """
+        path, explicit = resolve_side_report_path(self.config, self.dist_dir)
+        if path is None:
+            return
+        if not explicit and not path.is_file():
+            fallback = resolve_side_report_upload_path(self.config, self.data_dir)
+            if fallback != path and fallback.is_file():
+                path = fallback
+        if not path.is_file():
+            if explicit:
+                self._log("warning", f"side-report 文件不存在，照旧走 Modrinth：{path}")
+            return
+        by_sha1, by_file = load_side_report(path, logger=self.logger)
+        if not by_sha1 and not by_file:
+            return  # 空文件 / 全是无效记录：当作没有这个来源
+        self._side_report_by_sha1 = by_sha1
+        self._side_report_by_file = by_file
+        self._side_report_path = path
+        self._log(
+            "info",
+            "AutoSync 分类：已加载 ModSideDetector side-report（sha1 {} 条、文件名 {} 条）：{}".format(
+                len(by_sha1), len(by_file), path
+            ),
+        )
+
+    def _decide_by_side_report(self, entry: ClassifyEntry, hit: SideReportEntry) -> None:
+        """按 side-report 的结论直接定类别（命中后**不再查 Modrinth**）。"""
+        entry.category = SIDE_REPORT_CATEGORY[hit.side]
+        entry.source = SOURCE_SIDE_REPORT
+        entry.detail = hit.evidence
+        # 低置信 / 标记冲突的条目仍然采用（那正是接入的意义），但必须提示人工复核
+        note = hit.review_note
+        if note:
+            entry.note = _append_note(entry.note, note)
 
     # -------------------------------------------------------------- 报告落盘
     def load_last_report(self) -> Optional[ClassifyReport]:
@@ -621,9 +883,29 @@ class ClassifyService:
             f"AutoSync 分类：扫描到 {len(jars)} 个 jar（另有 {len(others)} 个非 jar 文件，跳过判定）",
         )
 
+        # ---------------------------------------------------------- side-report（优先来源）
+        # ModSideDetector 的结论比 Modrinth 里作者自填的 side 字段可信：命中的条目直接采用，
+        # 并且**跳过 Modrinth 查询**（省请求）。未命中的条目照旧走原流程。
+        self._load_side_report()
+        side_hits = 0
+        lookup_jars: List[ClassifyEntry] = []
+        for entry in jars:
+            if self.lookup_side_report(entry) is not None:
+                side_hits += 1
+            else:
+                lookup_jars.append(entry)
+        if side_hits:
+            self._log(
+                "info",
+                "AutoSync 分类：{} 个 jar 命中 side-report（ModSideDetector），本次不再查询 Modrinth".format(
+                    side_hits
+                ),
+            )
+
         # ---------------------------------------------------------- Modrinth：sha1 -> 项目
-        self._lookup_hits(jars, refresh=refresh, errors=report.errors)
-        self._lookup_projects(jars, refresh=refresh, errors=report.errors)
+        if lookup_jars:
+            self._lookup_hits(lookup_jars, refresh=refresh, errors=report.errors)
+            self._lookup_projects(lookup_jars, refresh=refresh, errors=report.errors)
 
         # ---------------------------------------------------------- 判定
         toml_cache: Dict[str, Tuple[Optional[str], str]] = {}
@@ -660,7 +942,11 @@ class ClassifyService:
         # ---------------------------------------------------------- 定动作
         for entry in jars:
             if entry.category == CATEGORY_UNKNOWN:
-                entry.note = "按双端处理（推断）" if cfg.classify_unknown_as == "both" else "待定，原地不动"
+                # 用 _append_note：命中 side-report 的待定条目可能已带「建议人工复核」提示
+                entry.note = _append_note(
+                    entry.note,
+                    "按双端处理（推断）" if cfg.classify_unknown_as == "both" else "待定，原地不动",
+                )
             entry.action = self._plan_action(entry)
         for entry in others:
             entry.action = ACTION_KEEP
@@ -673,6 +959,7 @@ class ClassifyService:
         )
         report.modrinth_hits = sum(1 for entry in jars if entry.source == SOURCE_MODRINTH)
         report.toml_fallbacks = sum(1 for entry in jars if entry.source == SOURCE_TOML)
+        report.side_report_hits = sum(1 for entry in jars if entry.source == SOURCE_SIDE_REPORT)
         report.counts = {
             CATEGORY_CLIENT_ONLY: sum(1 for e in jars if e.category == CATEGORY_CLIENT_ONLY),
             CATEGORY_BOTH: sum(1 for e in jars if e.category == CATEGORY_BOTH),
@@ -806,7 +1093,11 @@ class ClassifyService:
         project: Optional[ModrinthProject],
         toml_cache: Dict[str, Tuple[Optional[str], str]],
     ) -> None:
-        """先 Modrinth，查不到再 TOML 兜底，都不行就是待定。"""
+        """优先 side-report（ModSideDetector），其次 Modrinth，再 TOML 兜底，都不行就是待定。"""
+        side_hit = self.lookup_side_report(entry)
+        if side_hit is not None:
+            self._decide_by_side_report(entry, side_hit)
+            return
         if project is not None and project.client_side != SIDE_UNKNOWN and project.server_side != SIDE_UNKNOWN:
             entry.project_id = project.project_id
             entry.project_title = project.title or project.slug
@@ -943,8 +1234,12 @@ class ClassifyService:
                 )
             ),
             theme.hint(
-                "  依据来源：Modrinth {} 个、TOML 兜底 {} 个；依赖保护：{} 个被依赖的 modId".format(
-                    report.modrinth_hits, report.toml_fallbacks, report.protected_mod_ids
+                "  依据来源：ModSideDetector {} 个、Modrinth {} 个、TOML 兜底 {} 个；"
+                "依赖保护：{} 个被依赖的 modId".format(
+                    report.side_report_hits,
+                    report.modrinth_hits,
+                    report.toml_fallbacks,
+                    report.protected_mod_ids,
                 )
             ),
         ]
@@ -1002,12 +1297,19 @@ class ClassifyService:
             lines.append(theme.hint(f"纯服务端清单（{len(server_only)} 项，含 Modrinth 原始依据，供人工复核）："))
             for entry in server_only:
                 keep = "（被依赖，已强制保留在客户端）" if entry.forced_keep else ""
-                lines.append(
-                    "  * {}｜project_id={} client_side={} server_side={}｜计划动作={}{}".format(
-                        entry.rel_path,
+                if entry.source == SOURCE_SIDE_REPORT:
+                    # side-report 给的是 ModSideDetector 的结论，依据在 detail 里（含原始 confidence/notes）
+                    evidence = entry.detail
+                else:
+                    evidence = "project_id={} client_side={} server_side={}".format(
                         entry.project_id or "(无)",
                         entry.client_side or "(无)",
                         entry.server_side or "(无)",
+                    )
+                lines.append(
+                    "  * {}｜{}｜计划动作={}{}".format(
+                        entry.rel_path,
+                        evidence,
                         entry.action_label,
                         keep,
                     )

@@ -1,4 +1,4 @@
-﻿"""AutoSync 核心：构建清单 / 维护状态与缓存 / 托管 MSFP(裸 TCP) 服务 / 定时轮询。
+"""AutoSync 核心：构建清单 / 维护状态与缓存 / 托管 MSFP(裸 TCP) 服务 / 定时轮询。
 
 本模块只用标准库，可脱离 shell/CLI 单独调用。
 """
@@ -16,6 +16,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .config import AutoSyncConfig
 from . import __version__, theme
+from .side_report import SideReportReceiver
 from .tcp_server import PROTOCOL_NAME, AutoSyncTCPService
 from .manifest import (
     FileRecord,
@@ -133,6 +134,9 @@ class AutoSyncCore:
         self._watch_thread: Optional[threading.Thread] = None
         self._watch_stop = threading.Event()
         self._tcp: Optional[AutoSyncTCPService] = None
+        #: MSFP REPORT 上报接收器（懒创建；配置变了按 key 重建）
+        self._side_report: Optional[SideReportReceiver] = None
+        self._side_report_key: Optional[Any] = None
 
     # ------------------------------------------------------------------ 路径
     @property
@@ -193,18 +197,44 @@ class AutoSyncCore:
             )
         return self._tcp
 
+    def side_report_receiver(self) -> SideReportReceiver:
+        """side-report 上报接收器（同一 core 只一个；开关/令牌/路径变了就重建）。
+
+        ``REPORT`` 与文件分发共用同一个端口和 accept 循环，所以这里不做任何监听，
+        只是给 :class:`AutoSyncTCPService` 挂一个「配置 + 落盘 + 状态」对象。
+        """
+        config = self.config
+        key = (
+            bool(config.side_report_enabled),
+            str(config.side_report_token or ""),
+            str(config.side_report_path or ""),
+            str(self.data_dir),
+        )
+        if self._side_report is None or self._side_report_key != key:
+            self._side_report = SideReportReceiver(config=config, data_dir=self.data_dir, logger=self.logger)
+            self._side_report_key = key
+        return self._side_report
+
+    def _configure_side_report(self, service: AutoSyncTCPService) -> None:
+        """把当前配置对应的接收器挂到服务上（reload / restart 后必须重挂）。"""
+        service.set_side_report(self.side_report_receiver())
+
     def start_tcp(self) -> bool:
         if not self.config.tcp_enabled:
             self.logger.info("MSFP 服务在配置中被禁用（tcp_enabled=false）")
             return False
-        return self.tcp_service().start()
+        service = self.tcp_service()
+        self._configure_side_report(service)
+        return service.start()
 
     def stop_tcp(self) -> None:
         if self._tcp is not None:
             self._tcp.stop()
 
     def restart_tcp(self) -> bool:
-        return self.tcp_service().restart()
+        service = self.tcp_service()
+        self._configure_side_report(service)
+        return service.restart()
 
     @property
     def tcp_running(self) -> bool:

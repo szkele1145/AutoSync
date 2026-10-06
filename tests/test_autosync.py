@@ -44,8 +44,12 @@ from autosync.classify import (  # noqa: E402
     CATEGORY_CLIENT_ONLY,
     CATEGORY_SERVER_ONLY,
     CATEGORY_UNKNOWN,
+    SOURCE_SIDE_REPORT,
+    ClassifyReport,
     ClassifyService,
     judge_toml,
+    load_side_report,
+    resolve_side_report_path,
 )
 from autosync.config import AutoSyncConfig, ensure_config_file, load_config_file  # noqa: E402
 from autosync.deps import (  # noqa: E402
@@ -84,6 +88,12 @@ from autosync.scanner import (  # noqa: E402
     snapshot_key,
 )
 from autosync.shell import AutoSyncShell, resolve_base_dir  # noqa: E402
+# 注意别名：``classify.resolve_side_report_path`` 与本模块同名函数语义不同（前者按 dist_dir 解析）
+from autosync.side_report import (  # noqa: E402
+    SideReportReceiver,
+    resolve_side_report_path as resolve_upload_path,
+    token_matches,
+)
 from autosync.speedtest import ensure_speedtest_file, speedtest_bytes  # noqa: E402
 from autosync.tcp_client import MsfpClient, MsfpError, download_multithreaded, sha256_file  # noqa: E402
 from autosync.tcp_server import (  # noqa: E402
@@ -468,6 +478,256 @@ class TestTcpServer(unittest.TestCase):
         self.assertGreater(stats.get("pings", 0), 0)
         self.assertGreater(stats.get("gets", 0), 0)
         self.assertGreater(stats.get("bytes_sent", 0), 0)
+
+
+# --------------------------------------------------------------------------- 4b. side-report 上报（MSFP REPORT）
+class TestSideReportUpload(unittest.TestCase):
+    """``REPORT`` 命令：ModSideDetector 走**同一个 MSFP 端口**上报 side-report.json。
+
+    覆盖：开关关闭 / 开关开了但没配令牌 / 令牌错误（含前缀） / 长度超限 / 坏报文与
+    坏 JSON 与坏结构 / 正常上报的响应与落盘内容一致 / 半包重装 / 只发头不发 body 时
+    干净收场 / 成功保持 keep-alive / 错误关连接 / 同端口 GET+PING+SIZE 不受影响。
+    """
+
+    TOKEN = "s3cret-token"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name) / "client-dist"
+        self.payload_bytes = make_dist(self.root)
+        self.data_dir = Path(self.tmp.name) / "data"
+        self.service = None
+
+    def tearDown(self):
+        if self.service is not None:
+            self.service.stop()
+        self.tmp.cleanup()
+
+    # ---------------------------------------------------------------- 工具
+    def start(self, enabled=True, token=None, path="", max_bytes=None, idle_timeout=10):
+        """起一个带 side-report 接收器的 MSFP 服务（端口 0 = 随机高位端口）。"""
+        cfg = AutoSyncConfig.from_dict(
+            {
+                "side_report_enabled": enabled,
+                "side_report_token": self.TOKEN if token is None else token,
+                "side_report_path": path,
+            }
+        )
+        receiver = SideReportReceiver(config=cfg, data_dir=self.data_dir, logger=LOGGER)
+        if max_bytes is not None:
+            receiver.max_body_bytes = max_bytes
+        self.service = AutoSyncTCPService(
+            self.root,
+            host="127.0.0.1",
+            port=0,
+            logger=LOGGER,
+            idle_timeout=idle_timeout,
+            side_report=receiver,
+        )
+        assert self.service.start(), self.service.last_error
+        return receiver
+
+    @staticmethod
+    def payload(count=3):
+        return {
+            "generated": "2026-01-02T03:04:05+08:00",
+            "tool": "ModSideDetector/1.0",
+            "mods": [
+                {
+                    "file": "mod-中文-{}.jar".format(index),
+                    "sha1": "",
+                    "side": "client",
+                    "confidence": "high",
+                    "notes": "单元测试构造",
+                }
+                for index in range(count)
+            ],
+        }
+
+    def send(self, body, token=None, split=False):
+        """按 ``REPORT <token> <length>\\n<body>`` 发一次，返回服务端响应原文。"""
+        token = self.TOKEN if token is None else token
+        header = "REPORT {} {}\n".format(token, len(body)).encode("utf-8")
+        with socket.create_connection(("127.0.0.1", self.service.port), timeout=10) as sock:
+            if split:
+                half = max(1, len(body) // 2)
+                sock.sendall(header + body[:half])
+                time.sleep(0.2)  # 制造半包：服务端先收到一半
+                sock.sendall(body[half:])
+            else:
+                sock.sendall(header + body)
+            return sock.recv(65536)
+
+    def raw(self, data):
+        with socket.create_connection(("127.0.0.1", self.service.port), timeout=10) as sock:
+            sock.sendall(data)
+            return sock.recv(65536)
+
+    @property
+    def report_path(self):
+        return self.data_dir / "side-report.json"
+
+    # ---------------------------------------------------------------- 开关与令牌
+    def test_disabled_returns_err_disabled(self):
+        self.start(enabled=False)
+        self.assertEqual(self.send(json.dumps(self.payload()).encode("utf-8")), b"ERR disabled\n")
+        self.assertFalse(self.report_path.exists(), "关闭时绝不能落盘")
+
+    def test_enabled_without_token_returns_err_disabled(self):
+        self.start(enabled=True, token="")
+        self.assertEqual(self.send(json.dumps(self.payload()).encode("utf-8")), b"ERR disabled\n")
+        self.assertFalse(self.report_path.exists(), "没配令牌时绝不能落盘")
+
+    def test_wrong_token_returns_err_unauthorized(self):
+        self.start()
+        body = json.dumps(self.payload()).encode("utf-8")
+        self.assertEqual(self.send(body, token="wrong-token"), b"ERR unauthorized\n")
+        # 令牌前缀也不行（必须整体相等）
+        self.assertEqual(self.send(body, token=self.TOKEN[:-1]), b"ERR unauthorized\n")
+        self.assertFalse(self.report_path.exists(), "认证失败绝不能落盘")
+
+    # ---------------------------------------------------------------- 长度与格式
+    def test_too_large_is_rejected(self):
+        self.start(max_bytes=64)
+        body = json.dumps(self.payload(count=50)).encode("utf-8")
+        self.assertGreater(len(body), 64)
+        self.assertEqual(self.send(body), b"ERR too large\n")
+        self.assertFalse(self.report_path.exists())
+
+    def test_bad_requests(self):
+        self.start()
+        body = json.dumps(self.payload()).encode("utf-8")
+        cases = [
+            (b"REPORT\n", "缺参数"),
+            ("REPORT {}\n".format(self.TOKEN).encode("utf-8"), "只有令牌"),
+            ("REPORT {} abc\n".format(self.TOKEN).encode("utf-8"), "长度不是数字"),
+            ("REPORT {} -1\n".format(self.TOKEN).encode("utf-8"), "长度为负"),
+            ("REPORT {} 1 2 {}\n".format(self.TOKEN, len(body)).encode("utf-8") + body, "参数过多"),
+            (
+                "REPORT {} {}\n".format(self.TOKEN, len(b"{not json")).encode("utf-8") + b"{not json",
+                "JSON 不合法",
+            ),
+            (
+                "REPORT {} {}\n".format(self.TOKEN, len(b"[]")).encode("utf-8") + b"[]",
+                "顶层不是对象",
+            ),
+            (
+                "REPORT {} {}\n".format(self.TOKEN, len(b'{"mods": 1}')).encode("utf-8")
+                + b'{"mods": 1}',
+                "mods 不是数组",
+            ),
+        ]
+        for request, label in cases:
+            self.assertEqual(self.raw(request), b"ERR bad request\n", label)
+        self.assertFalse(self.report_path.exists(), "校验不过绝不能落盘")
+
+    # ---------------------------------------------------------------- 正常路径
+    def test_success_writes_report_atomically(self):
+        self.start()
+        payload = self.payload(count=7)
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.assertEqual(self.send(body), b"OK 7\n")
+        self.assertTrue(self.report_path.is_file())
+        # 内容与发出去的一致（含中文，验证 UTF-8 全链路）
+        self.assertEqual(json.loads(self.report_path.read_text("utf-8")), payload)
+        self.assertFalse(
+            self.report_path.with_suffix(".json.tmp").exists(), "临时文件必须已被 os.replace 掉"
+        )
+        self.assertEqual(self.service.stats.get("reports"), 1)
+
+    def test_half_packet_body_is_reassembled(self):
+        """TCP 半包：body 拆成两次 send，服务端必须循环读满。"""
+        self.start()
+        payload = self.payload(count=11)
+        self.assertEqual(self.send(json.dumps(payload).encode("utf-8"), split=True), b"OK 11\n")
+        self.assertEqual(len(json.loads(self.report_path.read_text("utf-8"))["mods"]), 11)
+
+    def test_truncated_body_closes_cleanly(self):
+        """只发头不发 body：读到超时后回 bad request（服务端线程不卡死）。"""
+        self.start(idle_timeout=1)
+        header = "REPORT {} 100\n".format(self.TOKEN).encode("utf-8")
+        self.assertEqual(self.raw(header), b"ERR bad request\n")
+
+    def test_success_keeps_connection_alive(self):
+        """成功路径与 GET/SIZE 一样保持 keep-alive。"""
+        self.start()
+        body = json.dumps(self.payload(count=1)).encode("utf-8")
+        with socket.create_connection(("127.0.0.1", self.service.port), timeout=10) as sock:
+            sock.sendall("REPORT {} {}\n".format(self.TOKEN, len(body)).encode("utf-8") + body)
+            self.assertEqual(sock.recv(65536), b"OK 1\n")
+            sock.sendall(b"PING\n")
+            self.assertEqual(sock.recv(65536), b"OK 0\n")
+
+    def test_error_closes_connection(self):
+        """错误路径关连接（body 可能还没被读完，留着会让后续字节被当成新请求行）。"""
+        self.start()
+        body = json.dumps(self.payload()).encode("utf-8")
+        with socket.create_connection(("127.0.0.1", self.service.port), timeout=10) as sock:
+            sock.sendall("REPORT bad-token {}\n".format(len(body)).encode("utf-8") + body)
+            self.assertEqual(sock.recv(65536), b"ERR unauthorized\n")
+            self.assertEqual(sock.recv(65536), b"", "错误响应后服务端应关闭连接")
+
+    def test_custom_path_is_relative_to_data_dir(self):
+        self.start(path="reports/latest.json")
+        self.assertEqual(self.send(json.dumps(self.payload(count=2)).encode("utf-8")), b"OK 2\n")
+        self.assertTrue((self.data_dir / "reports" / "latest.json").is_file())
+
+    def test_msfp_commands_still_work_on_the_same_port(self):
+        """同一个端口：REPORT 前后 GET / PING / SIZE 都照旧。"""
+        self.start()
+        with MsfpClient("127.0.0.1", self.service.port, timeout=10) as client:
+            self.assertGreaterEqual(client.ping(), 0.0)
+            self.assertEqual(client.size(CN_JAR), len(self.payload_bytes))
+            self.assertEqual(client.get(CN_JAR), (self.root / CN_JAR).read_bytes())
+        self.assertEqual(self.send(json.dumps(self.payload(count=3)).encode("utf-8")), b"OK 3\n")
+        with MsfpClient("127.0.0.1", self.service.port, timeout=10) as client:
+            self.assertEqual(client.size("mods/plain-mod.jar"), 500)
+            self.assertEqual(client.get(CN_JAR, 0, 15), self.payload_bytes[:16])
+
+    def test_receiver_without_side_report_keeps_old_behavior(self):
+        """不挂接收器（等价改造前）：REPORT 回 disabled，GET/PING 照旧。"""
+        self.service = AutoSyncTCPService(self.root, host="127.0.0.1", port=0, logger=LOGGER)
+        assert self.service.start(), self.service.last_error
+        self.assertEqual(self.raw(b"REPORT tok 2\n{}"), b"ERR disabled\n")
+        with MsfpClient("127.0.0.1", self.service.port, timeout=10) as client:
+            self.assertGreaterEqual(client.ping(), 0.0)
+
+    # ---------------------------------------------------------------- 辅助函数
+    def test_token_matches_is_exact(self):
+        self.assertTrue(token_matches("abc", "abc"))
+        self.assertFalse(token_matches("ab", "abc"))
+        self.assertFalse(token_matches("abcd", "abc"))
+        self.assertFalse(token_matches("", "abc"))
+        self.assertFalse(token_matches("abc", ""))
+        self.assertTrue(token_matches("中文令牌", "中文令牌"))
+
+    def test_resolve_side_report_path(self):
+        cfg = AutoSyncConfig.from_dict({})
+        self.assertEqual(resolve_upload_path(cfg, self.data_dir), self.data_dir / "side-report.json")
+        cfg = AutoSyncConfig.from_dict({"side_report_path": "sub/report.json"})
+        self.assertEqual(resolve_upload_path(cfg, self.data_dir), self.data_dir / "sub" / "report.json")
+        absolute = Path(self.tmp.name).resolve() / "abs-report.json"
+        cfg = AutoSyncConfig.from_dict({"side_report_path": str(absolute)})
+        self.assertEqual(resolve_upload_path(cfg, self.data_dir), absolute)
+
+    def test_config_defaults_are_off(self):
+        """默认必须是「关闭 + 空令牌」，向后兼容（行为与改造前一致）。"""
+        from autosync.config import DEFAULT_CONFIG
+
+        self.assertFalse(DEFAULT_CONFIG["side_report_enabled"])
+        self.assertEqual(DEFAULT_CONFIG["side_report_token"], "")
+        self.assertEqual(DEFAULT_CONFIG["side_report_path"], "")
+        cfg = AutoSyncConfig.from_dict({})
+        self.assertFalse(cfg.side_report_enabled)
+        self.assertEqual(cfg.to_dict()["side_report_token"], "")
+        self.assertEqual(cfg.to_dict()["side_report_path"], "")
+        # 旧配置（没有这三个键）读进来也一样
+        legacy = AutoSyncConfig.from_dict({"tcp_port": 8123, "classify_side_report": ""})
+        self.assertFalse(legacy.side_report_enabled)
+        self.assertEqual(legacy.to_dict()["side_report_token"], "")
+        example = json.loads((PLUGIN_DIR / "config.example.json").read_text("utf-8"))
+        for key in ("side_report_enabled", "side_report_token", "side_report_path"):
+            self.assertIn(key, example, key)
 
 
 # --------------------------------------------------------------------------- 5. speedtest.bin
@@ -1575,6 +1835,222 @@ class TestClassify(unittest.TestCase):
         # 纯服务端清单要能看到原始依据
         self.assertIn("纯服务端清单（1 项", lines)
         self.assertIn("client_side=unsupported", lines)
+
+    # ---------------------------------------------------------------- side-report
+    def sha1_of(self, name: str) -> str:
+        return hashlib.sha1((self.mods / name).read_bytes()).hexdigest()
+
+    @staticmethod
+    def side_report_doc(entries) -> str:
+        return json.dumps(
+            {
+                "generated": "2026-10-06T17:17:48+0800",
+                "tool": "ModSideDetector 1.0.0",
+                "unknown_as": "both",
+                "mods": entries,
+            },
+            ensure_ascii=False,
+        )
+
+    @staticmethod
+    def entry_snapshot(report: ClassifyReport):
+        """只比较判定结果（不含新加的统计字段）。"""
+        return [
+            (e.rel_path, e.category, e.source, e.detail, e.action, e.note) for e in report.entries
+        ]
+
+    def side_report_entry(self, name: str, side: str, **extra) -> dict:
+        data = {
+            "file": name,
+            "sha1": self.sha1_of(name),
+            "sha256": "0" * 64,
+            "mod_id": name[:-4],
+            "display_name": name,
+            "side": side,
+            "confidence": "high",
+            "sources": {},
+            "notes": "两源一致：{}".format(side),
+            "conflict": False,
+            "needs_review": False,
+        }
+        data.update(extra)
+        return data
+
+    def test_side_report_is_used_and_skips_modrinth(self):
+        """命中 side-report：优先采用它的结论（含 confidence/notes），且完全不发 Modrinth 请求。"""
+        self.make_dist()
+        # Modrinth 侧故意留空：证明结论确实来自 side-report，而不是网络
+        FakeClassifyApiHandler.sides = {}
+        entries = [
+            self.side_report_entry("sodium.jar", "server", confidence="low", needs_review=True),
+            self.side_report_entry("create.jar", "client"),
+            self.side_report_entry("coreprotect.jar", "both"),
+            self.side_report_entry("mystery.jar", "unknown", confidence="low"),
+            self.side_report_entry("tomlclient.jar", "both"),
+            self.side_report_entry("tomldisplay.jar", "both"),
+        ]
+        (self.mods / "side-report.json").write_text(self.side_report_doc(entries), "utf-8")
+        # 指向一个必然连不上的地址：只要发了 Modrinth 请求就会有 errors
+        service = self.service(
+            modrinth_api_base="http://127.0.0.1:1/v2",
+            modrinth_timeout_seconds=1,
+            modrinth_max_retries=0,
+        )
+        report = service.analyze()
+
+        self.assertTrue(report.ok, report.message)
+        self.assertEqual(report.errors, [], "命中 side-report 的条目不得再查 Modrinth")
+        self.assertEqual(report.side_report_hits, 6)
+        self.assertEqual(report.modrinth_hits, 0)
+        self.assertEqual(report.counts[CATEGORY_CLIENT_ONLY], 1)  # create.jar
+        self.assertEqual(report.counts[CATEGORY_SERVER_ONLY], 1)  # sodium.jar
+        self.assertEqual(report.counts[CATEGORY_BOTH], 3)
+        self.assertEqual(report.counts[CATEGORY_UNKNOWN], 1)  # mystery.jar
+
+        by_name = {e.name: e for e in report.entries}
+        sodium = by_name["sodium.jar"]
+        self.assertEqual(sodium.source, SOURCE_SIDE_REPORT)
+        self.assertEqual(sodium.source, "modsidedetector", "不得复用 modrinth 作为来源标识")
+        self.assertEqual(sodium.category, CATEGORY_SERVER_ONLY)
+        self.assertEqual(sodium.action, "copy")
+        # 原始 confidence / notes 必须进报告
+        self.assertIn("side=server", sodium.detail)
+        self.assertIn("confidence=low", sodium.detail)
+        self.assertIn("两源一致：server", sodium.detail)
+        self.assertIn("mod_id=sodium", sodium.detail)
+        # low / needs_review 仍然采用，但必须提示人工复核
+        self.assertIn("建议人工复核", sodium.note)
+        self.assertIn("needs_review=true", sodium.note)
+        self.assertIn("confidence=low", sodium.note)
+        # unknown -> 待定，照旧按 classify_unknown_as 处理，且保留复核提示
+        mystery = by_name["mystery.jar"]
+        self.assertEqual(mystery.category, CATEGORY_UNKNOWN)
+        self.assertEqual(mystery.action, "copy")
+        self.assertIn("confidence=low", mystery.note)
+        self.assertIn("按双端处理", mystery.note)
+
+        lines = "\n".join(service.report_lines(report))
+        self.assertIn("依据来源：ModSideDetector 6 个、Modrinth 0 个、TOML 兜底 0 个", lines)
+        # 纯服务端清单要能看到 side-report 的原始依据
+        self.assertIn("modsidedetector(side=server", lines)
+
+        payload = json.loads(service.report_path.read_text("utf-8"))
+        self.assertEqual(payload["side_report_hits"], 6)
+
+    def test_side_report_filename_fallback_and_invalid_entries_ignored(self):
+        """sha1 缺失时按文件名匹配；字段缺失 / side 不认识的记录一律忽略，不影响整轮分析。"""
+        self.make_dist()
+        entries = [
+            # sha1 缺失 -> 按文件名匹配
+            {"file": "sodium.jar", "side": "client", "confidence": "medium", "notes": "仅文件名匹配"},
+            # side 取值不认识 -> 忽略
+            {"file": "create.jar", "sha1": self.sha1_of("create.jar"), "side": "clientside"},
+            # 不是对象 -> 忽略
+            "这不是对象",
+            # sha1 形状不对且没有 file -> 忽略
+            {"sha1": "not-a-sha1", "side": "both"},
+            # 带目录的 file -> 取 basename 匹配
+            {"file": "sub/coreprotect.jar", "side": "both", "confidence": "high", "notes": "路径匹配"},
+        ]
+        external = self.root / "side-report.json"
+        external.write_text(self.side_report_doc(entries), "utf-8")
+        service = self.service(classify_side_report=str(external))
+        report = service.analyze()
+
+        self.assertTrue(report.ok, report.message)
+        self.assertEqual(report.side_report_hits, 2)
+        by_name = {e.name: e for e in report.entries}
+        self.assertEqual(by_name["sodium.jar"].source, SOURCE_SIDE_REPORT)
+        self.assertEqual(by_name["sodium.jar"].category, CATEGORY_CLIENT_ONLY)
+        self.assertEqual(by_name["coreprotect.jar"].source, SOURCE_SIDE_REPORT)
+        self.assertEqual(by_name["coreprotect.jar"].category, CATEGORY_BOTH)
+        # 被忽略的 create.jar 照旧走 Modrinth（两边都支持 -> 双端）
+        self.assertEqual(by_name["create.jar"].source, "modrinth")
+        self.assertEqual(by_name["create.jar"].category, CATEGORY_BOTH)
+
+    def test_side_report_can_be_disabled_or_corrupt(self):
+        """配置 none/off/disabled 或文件损坏时，结果必须与没有这个功能时完全一致。"""
+        self.make_dist()
+        external = self.root / "side-report.json"
+        external.write_text(
+            self.side_report_doc([self.side_report_entry("sodium.jar", "server")]), "utf-8"
+        )
+        # a) 自动探测（<dist_dir>/mods 里没有该文件）= 改造前的行为
+        baseline = self.entry_snapshot(self.service().analyze())
+        # b) 文件存在但显式关闭
+        for off in ("none", "off", "disabled", "NONE"):
+            report = self.service(classify_side_report=off).analyze()
+            self.assertEqual(report.side_report_hits, 0, off)
+            self.assertEqual(self.entry_snapshot(report), baseline, off)
+        # c) 路径指向损坏的 JSON：忽略该文件，行为同样与改造前一致
+        broken = self.root / "broken.json"
+        broken.write_text("{这不是合法 JSON", "utf-8")
+        report = self.service(classify_side_report=str(broken)).analyze()
+        self.assertTrue(report.ok)
+        self.assertEqual(report.side_report_hits, 0)
+        self.assertEqual(self.entry_snapshot(report), baseline)
+        # d) 结构不对（mods 不是数组）同样忽略
+        broken.write_text(json.dumps({"mods": {"sodium.jar": {"side": "server"}}}), "utf-8")
+        report = self.service(classify_side_report=str(broken)).analyze()
+        self.assertEqual(report.side_report_hits, 0)
+        self.assertEqual(self.entry_snapshot(report), baseline)
+        # e) 启用后结论确实变了（功能真的生效）
+        enabled = self.service(classify_side_report=str(external)).analyze()
+        self.assertEqual(enabled.side_report_hits, 1)
+        self.assertNotEqual(self.entry_snapshot(enabled), baseline)
+
+    def test_side_report_config_and_path_resolution(self):
+        """配置默认值 / 类型纠偏 / 路径解析（相对 dist_dir、绝对路径、关闭）。"""
+        default = AutoSyncConfig.from_dict({})
+        self.assertEqual(default.classify_side_report, "")
+        self.assertIs(default.to_dict()["classify_side_report"], "")
+        self.assertEqual(
+            AutoSyncConfig.from_dict({"classify_side_report": "  mods/x.json  "}).classify_side_report,
+            "mods/x.json",
+        )
+        self.assertEqual(
+            AutoSyncConfig.from_dict({"classify_side_report": None}).classify_side_report, ""
+        )
+
+        path, explicit = resolve_side_report_path(default, self.dist)
+        self.assertEqual(path, self.dist / "mods" / "side-report.json")
+        self.assertFalse(explicit, "自动探测不算显式配置")
+
+        custom = AutoSyncConfig.from_dict({"classify_side_report": "reports/side.json"})
+        path, explicit = resolve_side_report_path(custom, self.dist)
+        self.assertEqual(path, self.dist / "reports" / "side.json")
+        self.assertTrue(explicit)
+
+        absolute = self.root / "abs.json"
+        custom = AutoSyncConfig.from_dict({"classify_side_report": str(absolute)})
+        self.assertEqual(resolve_side_report_path(custom, self.dist)[0], absolute)
+
+        for off in ("none", "off", "disabled", "OFF"):
+            self.assertIsNone(
+                resolve_side_report_path(
+                    AutoSyncConfig.from_dict({"classify_side_report": off}), self.dist
+                )[0],
+                off,
+            )
+
+    def test_side_report_loader_tolerates_bad_input(self):
+        """load_side_report 对坏输入只返回空索引，绝不抛异常。"""
+        missing = self.root / "nope.json"
+        self.assertEqual(load_side_report(missing), ({}, {}))
+        for payload in ('{"mods": [', "[]", '{"mods": null}', '"字符串"'):
+            broken = self.root / "bad.json"
+            broken.write_text(payload, "utf-8")
+            by_sha1, by_file = load_side_report(broken)
+            self.assertEqual((by_sha1, by_file), ({}, {}), payload)
+
+    def test_legacy_report_without_side_report_hits_reads_back(self):
+        """旧版 classify-report.json（没有 side_report_hits）必须能读回，默认 0。"""
+        report = ClassifyReport.from_dict(
+            {"ok": True, "modrinth_hits": 3, "toml_fallbacks": 2, "counts": {}}
+        )
+        self.assertEqual(report.side_report_hits, 0)
+        self.assertEqual(report.modrinth_hits, 3)
+        self.assertEqual(report.to_dict()["side_report_hits"], 0)
 
     # ---------------------------------------------------------------- apply
     def test_apply_copies_dual_and_moves_server_only(self):

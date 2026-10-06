@@ -87,6 +87,18 @@ AutoSync ✔ MSFP    服务运行中：0.0.0.0:8123（协议 MSFP v1）· 分发
 | `!!autosync tcp restart` | 等级 2 | 重启 MSFP 服务 |
 | `!!autosync classify` | 所有人 | **干跑**分类：纯客户端 / 双端 / 纯服务端 / 待定（不改动任何文件） |
 | `!!autosync classify apply` | 等级 2 | 按上次结果搬运（双端复制；纯服务端默认也只复制） |
+
+> `classify` 会**优先**采用配套工具 ModSideDetector 导出的 `side-report.json`
+> （默认自动探测 `<dist_dir>/mods/side-report.json`，可用配置项 `classify_side_report` 指定或关闭），
+> 命中即跳过 Modrinth 查询；命中数会显示在报告的「依据来源」一行。
+> 详见 [服务端-Python版.md 的 4.2 模组分类](服务端-Python版.md#42-模组分类)（两边配置键与行为完全一致）。
+>
+> 报告还可以**通过网络上报**（`side_report_enabled`，默认关闭）：工具用**同一个 MSFP 端口**
+> 发 `REPORT <token> <length>\n<JSON>`，服务端原子写入 `side_report_path`
+> （MCDR 版默认 `config/autosync/autosync-data/side-report.json`），
+> 之后 classify 会自动读到它。开关打开但没配 `side_report_token` 时，`REPORT` 一律回
+> `ERR disabled`（不配令牌绝不接收写入）。完整报文与响应见
+> [服务端-Python版.md 4.2.1](服务端-Python版.md#421-让-modsidedetector-直接网络上报可选默认关闭)。
 | `!!autosync deps` | 所有人 | **只读**依赖检查（解析 jar 元数据，含 JiJ 嵌套层） |
 | `!!autosync deps fix` | 所有人 | 列出缺失前置编号与候选版本（**不下载任何文件**） |
 | `!!autosync deps fix 1a 2a` | 等级 2 | 只下载指定编号的前置 |
@@ -225,7 +237,7 @@ AutoSync-1.0.0.mcdr   (zip)
 ├── autosync/
 │   ├── __init__.py             版本号 / 包说明
 │   ├── entry.py                MCDR 入口
-│   └── core/                   独立版核心代码的副本（16 个模块）
+│   └── core/                   独立版核心代码的副本（17 个模块，含 side_report.py）
 └── config.example.json         默认配置参考
 ```
 

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AutoSync — Minecraft 整合包自动同步</title>
+<meta name="description" content="Minecraft 整合包自动同步工具：javaagent 客户端 + Python/MCDR 双服务端，自研 MSFP 裸 TCP 协议，支持 CDN 自动测速选源。">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0a0e14;--panel:#10151f;--panel2:#141b26;--line:#1e2733;
+    --txt:#dfe6f0;--dim:#78839a;--dim2:#57606f;
+    --cyan:#56b6c2;--green:#98c379;--yellow:#e5c07b;--red:#e06c75;
+    --purple:#c678dd;--blue:#61afef;--gold:#e8b923;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--txt);line-height:1.75;
+    font-family:"Cascadia Code","JetBrains Mono",Consolas,"Microsoft YaHei",-apple-system,sans-serif;
+    font-size:15px;-webkit-font-smoothing:antialiased}
+
+  /* 背景 */
+  #bg{position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background:
+      radial-gradient(ellipse 70% 50% at 50% -8%,rgba(86,182,194,.13),transparent 62%),
+      radial-gradient(ellipse 50% 40% at 88% 106%,rgba(198,120,221,.10),transparent 60%),
+      var(--bg)}
+  #grid{position:fixed;inset:-60%;z-index:-1;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(86,182,194,.05) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(86,182,194,.05) 1px,transparent 1px);
+    background-size:52px 52px;
+    transform:perspective(680px) rotateX(60deg);
+    mask-image:radial-gradient(ellipse 62% 60% at 50% 34%,#000 12%,transparent 72%);
+    -webkit-mask-image:radial-gradient(ellipse 62% 60% at 50% 34%,#000 12%,transparent 72%)}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+
+  /* 顶栏 */
+  header{position:sticky;top:0;z-index:50;backdrop-filter:blur(11px);
+    background:rgba(10,14,20,.84);border-bottom:1px solid var(--line)}
+  .nav{display:flex;align-items:center;gap:24px;height:58px}
+  .brand{font-weight:800;font-size:19px;letter-spacing:.02em;
+    background:linear-gradient(100deg,var(--cyan),var(--blue) 45%,var(--purple) 82%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .nav a{color:var(--dim);text-decoration:none;font-size:13.5px;transition:color .18s}
+  .nav a:hover{color:var(--cyan)}
+  .nav .sp{flex:1}
+  .nav .gh{border:1px solid var(--line);padding:5px 13px;border-radius:7px;color:var(--txt)}
+  .nav .gh:hover{border-color:var(--cyan);color:var(--cyan)}
+
+  /* Hero */
+  .hero{padding:84px 0 64px;text-align:center}
+  .hero h1{font-size:clamp(38px,7vw,74px);font-weight:800;letter-spacing:.02em;
+    background:linear-gradient(100deg,var(--cyan),var(--blue) 42%,var(--purple) 80%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    background-size:220% 100%;animation:hue 9s ease-in-out infinite alternate}
+  @keyframes hue{to{background-position:100% 0}}
+  .hero .sub{margin-top:20px;font-size:clamp(15px,2vw,21px);color:var(--dim);letter-spacing:.05em}
+  .hero .desc{margin:22px auto 0;max-width:660px;color:var(--dim2);font-size:14.5px}
+  .btns{margin-top:36px;display:flex;gap:13px;justify-content:center;flex-wrap:wrap}
+  .btn{padding:11px 25px;border-radius:9px;text-decoration:none;font-size:14.5px;
+    font-weight:600;transition:.2s;border:1px solid transparent}
+  .btn.p{background:linear-gradient(100deg,var(--cyan),var(--blue));color:#04141a}
+  .btn.p:hover{filter:brightness(1.14);box-shadow:0 0 26px rgba(86,182,194,.45)}
+  .btn.s{border-color:var(--line);color:var(--txt)}
+  .btn.s:hover{border-color:var(--cyan);color:var(--cyan)}
+  .chips{margin-top:30px;display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+  .chip{padding:5px 14px;border:1px solid var(--line);border-radius:999px;font-size:12.5px;
+    color:var(--cyan);background:rgba(86,182,194,.055)}
+
+  /* 区块 */
+  section{padding:56px 0;border-top:1px solid var(--line)}
+  .stitle{font-size:clamp(21px,3.2vw,32px);font-weight:700;margin-bottom:9px}
+  .stitle::after{content:'';display:block;width:46px;height:3px;margin-top:13px;border-radius:2px;
+    background:linear-gradient(90deg,var(--cyan),var(--purple))}
+  .ssub{color:var(--dim);margin-bottom:32px;font-size:14.5px}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:15px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:21px;
+    transition:.22s}
+  .card:hover{border-color:rgba(86,182,194,.42);transform:translateY(-3px);
+    box-shadow:0 10px 34px rgba(0,0,0,.36)}
+  .card h3{font-size:15.5px;margin-bottom:9px;color:var(--cyan);font-weight:700}
+  .card p{font-size:13.5px;color:var(--dim)}
+
+  /* 代码 */
+  pre{background:#0c1119;border:1px solid var(--line);border-radius:9px;
+    padding:15px 18px;overflow-x:auto;font-size:13px;line-height:1.85;margin:11px 0}
+  code{font-family:inherit}
+  .k{color:var(--purple)}.s{color:var(--green)}.c2{color:var(--dim2)}.g{color:var(--green)}
+  .y{color:var(--yellow)}.cy{color:var(--cyan)}
+
+  /* 表格 */
+  table{width:100%;border-collapse:collapse;margin:15px 0;font-size:13.5px}
+  th,td{text-align:left;padding:10px 13px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:600;font-size:12.5px;letter-spacing:.04em}
+  td{color:#c2cad6}
+  tr:hover td{background:rgba(86,182,194,.035)}
+
+  /* 步骤 */
+  .steps{counter-reset:s;list-style:none}
+  .steps li{counter-increment:s;position:relative;padding:13px 0 13px 46px;
+    border-bottom:1px solid rgba(30,39,51,.6)}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:13px;
+    width:27px;height:27px;border-radius:50%;display:grid;place-items:center;
+    font-size:12.5px;border:1px solid rgba(86,182,194,.42);color:var(--cyan)}
+  .steps li b{color:var(--txt)}
+  .steps li span{color:var(--dim);font-size:13.5px}
+
+  /* 文档链接 */
+  .docs{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:12px}
+  .doc{display:flex;gap:13px;align-items:flex-start;padding:16px;border-radius:10px;
+    border:1px solid var(--line);background:var(--panel);text-decoration:none;transition:.2s}
+  .doc:hover{border-color:rgba(86,182,194,.45);background:var(--panel2)}
+  .doc .ic{font-size:19px;flex:none}
+  .doc .t{display:block;font-size:14.5px;color:var(--txt);font-weight:600;margin-bottom:4px}
+  .doc .d{display:block;font-size:12.5px;color:var(--dim);line-height:1.6}
+
+  /* 数据 */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:14px;
+    text-align:center}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:23px 14px}
+  .stat .n{font-size:clamp(26px,4vw,40px);font-weight:800;line-height:1.1;
+    font-variant-numeric:tabular-nums}
+  .stat .l{font-size:12.5px;color:var(--dim);margin-top:7px}
+
+  .note{border-left:3px solid var(--cyan);background:rgba(86,182,194,.055);
+    padding:13px 17px;border-radius:0 8px 8px 0;font-size:13.5px;color:#aab4c2;margin:17px 0}
+  .note.w{border-color:var(--yellow);background:rgba(229,192,123,.06)}
+  .note.w b{color:var(--yellow)}
+
+  footer{padding:44px 0 56px;border-top:1px solid var(--line);text-align:center;
+    color:var(--dim2);font-size:13px}
+  footer a{color:var(--dim);text-decoration:none}
+  footer a:hover{color:var(--cyan)}
+  footer .made{margin-top:14px;font-size:12.5px;color:#4a5261}
+  footer .made b{color:var(--purple);font-weight:600}
+
+  @media(max-width:640px){
+    .nav{gap:14px}.nav .h{display:none}
+    .hero{padding:56px 0 44px}
+    section{padding:42px 0}
+  }
+</style>
+</head>
+<body>
+<div id="bg"></div><div id="grid"></div>
+
+<header>
+  <div class="wrap nav">
+    <span class="brand">AutoSync</span>
+    <a class="h" href="#features">特性</a>
+    <a class="h" href="#start">快速开始</a>
+    <a class="h" href="#docs">文档</a>
+    <a class="h" href="#data">实测</a>
+    <span class="sp"></span>
+    <a class="gh" href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+</header>
+
+<div class="wrap hero">
+  <h1>AutoSync</h1>
+  <div class="sub">Minecraft 整合包 · 自动同步</div>
+  <p class="desc">
+    玩家点一次启动，客户端自动比对服务端清单并下载差异文件，进游戏时版本必然一致。
+    自研 MSFP 裸 TCP 协议，绕过国内云服务器的 ICP 拦截；CDN 自动测速选源，省服务器带宽。
+  </p>
+  <div class="btns">
+    <a class="btn p" href="#start">快速开始</a>
+    <a class="btn s" href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">查看源码</a>
+  </div>
+  <div class="chips">
+    <span class="chip">javaagent</span>
+    <span class="chip">MSFP 裸 TCP</span>
+    <span class="chip">CDN 自动测速</span>
+    <span class="chip">Python / MCDR 双服务端</span>
+    <span class="chip">开源 MIT</span>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <div class="stitle">它解决什么问题</div>
+    <div class="ssub">针对国内中小型 MC 服务器的真实痛点</div>
+    <div class="cards">
+      <div class="card">
+        <h3>绕过 ICP 拦截</h3>
+        <p>国内云服务器对未备案的 HTTP 访问会拦截（返回"未备案"页）。AutoSync 自研 <b>MSFP 裸 TCP 协议</b>，不走 HTTP，无需备案、无需域名。</p>
+      </div>
+      <div class="card">
+        <h3>根治版本不一致</h3>
+        <p><b>镜像模式</b>：客户端 <code>mods/</code> 强制与服务端清单完全一致，清单外文件移到 <code>.modsync-removed/</code> 备份。玩家怎么折腾都不会崩在版本上。</p>
+      </div>
+      <div class="card">
+        <h3>省服务器带宽</h3>
+        <p><b>CDN 自动测速选源</b>：同步前实测 Modrinth CDN 与服务器速度，差距不大走 CDN，CDN 慢则提线程重测，仍慢才用服务器。实测 80.7% 的 mod 可走 CDN。</p>
+      </div>
+      <div class="card">
+        <h3>下载更快</h3>
+        <p>单文件多线程分块 + 多文件并发。实测同样 4 个文件：单线程 1.37 MB/s → 4 线程 <b>3.68 MB/s</b>（2.7 倍）。</p>
+      </div>
+      <div class="card">
+        <h3>出问题看得见</h3>
+        <p>客户端图形窗口内置<b>实时日志</b>：边同步边滚动，能直接看到 <code>[测速]</code>、<code>[CDN]</code>、<code>[服务端]</code> 的决策过程，玩家截图就能反馈。</p>
+      </div>
+      <div class="card">
+        <h3>服务端全自动</h3>
+        <p>扫描分发目录、算哈希、查 Modrinth、生成清单，一条命令完成。另有模组分类、依赖检查（含 JiJ 嵌套）、缺失前置自动下载。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <div class="stitle">快速开始</div>
+    <div class="ssub">服务端 3 步，客户端 3 步</div>
+
+    <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(430px,1fr))">
+      <div class="card" style="padding:24px">
+        <h3 style="margin-bottom:16px">服务端</h3>
+        <ol class="steps">
+          <li><b>放到服务器</b><br><span>克隆仓库或解压发布包到 <code>/opt/autosync</code></span></li>
+          <li><b>生成配置</b><br><span>首次运行自动创建 <code>config.json</code></span></li>
+          <li><b>启动</b><br><span>把要分发的文件放进 <code>client-dist/</code>，然后启动常驻</span></li>
+        </ol>
+<pre><code><span class="c2"># 交互式（推荐）</span>
+<span class="k">python3</span> -m autosync --base . shell
+
+<span class="c2"># 常驻服务</span>
+<span class="k">python3</span> -m autosync --base . serve
+
+<span class="c2"># 只构建一次清单</span>
+<span class="k">python3</span> -m autosync --base . build</code></pre>
+      </div>
+
+      <div class="card" style="padding:24px">
+        <h3 style="margin-bottom:16px">客户端</h3>
+        <ol class="steps">
+          <li><b>放进版本目录</b><br><span><code>versions/&lt;版本名&gt;/</code> 下放 jar 与 <code>mcpatch.yml</code></span></li>
+          <li><b>改配置</b><br><span>把 <code>urls</code> 改成你的更新源地址</span></li>
+          <li><b>加 JVM 参数</b><br><span>启动器里给该版本加上 javaagent 参数</span></li>
+        </ol>
+<pre><code><span class="c2"># 版本目录内容</span>
+AutoSync-1.0.0.jar
+mcpatch.yml
+
+<span class="c2"># JVM 参数</span>
+-javaagent:AutoSync-1.0.0.jar</code></pre>
+      </div>
+    </div>
+
+    <div class="note">
+      <b>为什么必须用 javaagent？</b> 普通 mod 在游戏启动后才生效，而那时 <code>mods/</code> 里的 jar 已被 JVM 锁定，无法替换。
+      javaagent 在 Minecraft 加载任何 mod <b>之前</b> 运行，可以自由读写这些文件。
+    </div>
+  </div>
+</section>
+
+<section id="data">
+  <div class="wrap">
+    <div class="stitle">实测数据</div>
+    <div class="ssub">一个 150 个 mod / 817 MB 的整合包</div>
+    <div class="stats">
+      <div class="stat"><div class="n c" style="color:var(--green)">3.68</div><div class="l">MB/s（4 线程）</div></div>
+      <div class="stat"><div class="n" style="color:var(--cyan)">2.7×</div><div class="l">比单线程快</div></div>
+      <div class="stat"><div class="n" style="color:var(--blue)">80.7%</div><div class="l">mod 可走 CDN</div></div>
+      <div class="stat"><div class="n" style="color:var(--purple)">164</div><div class="l">项自动化测试</div></div>
+    </div>
+
+    <table style="margin-top:26px">
+      <thead><tr><th>维度</th><th>传统 HTTP + 单源</th><th>AutoSync</th></tr></thead>
+      <tbody>
+        <tr><td>国内云服务器可用性</td><td style="color:var(--red)">HTTP 被 ICP 拦截</td><td style="color:var(--green)">裸 TCP 穿透</td></tr>
+        <tr><td>玩家版本一致性</td><td>靠自觉，经常崩</td><td style="color:var(--green)">强制镜像，每次启动校准</td></tr>
+        <tr><td>下载速度</td><td>1.37 MB/s</td><td style="color:var(--green)">3.68 MB/s</td></tr>
+        <tr><td>服务器带宽占用</td><td>100% 从服务器拉</td><td style="color:var(--green)">80.7% 可走 CDN</td></tr>
+        <tr><td>出问题排查</td><td>让玩家找日志文件</td><td style="color:var(--green)">窗口内实时可见</td></tr>
+        <tr><td>玩家人工操作</td><td>删旧包、重下、覆盖</td><td style="color:var(--green)">点启动，其余全自动</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="docs">
+  <div class="wrap">
+    <div class="stitle">文档</div>
+    <div class="ssub">从部署到排错，全部覆盖</div>
+    <div class="docs" id="docList"></div>
+  </div>
+</section>
+
+<section id="tree">
+  <div class="wrap">
+    <div class="stitle">仓库结构</div>
+    <div class="ssub">客户端 / 服务端 / 文档 / 工具</div>
+<pre><code>AutoSync/
+├── client/                 客户端
+│   ├── AutoSync-1.0.0.jar    javaagent（javaagent / 独立进程 / modloader 三种启动方式）
+│   ├── mcpatch.yml           配置模板（含全部配置项与注释）
+│   └── src-java/             客户端 Java 源码（Gradle 工程）
+├── server/
+│   ├── python/               独立 Python 版（纯标准库，Python 3.11+）
+│   └── mcdr/                 MCDR 插件版 + 打包好的 .mcdr
+├── docs/                     全部文档
+├── tests/                    164 项测试（仅需标准库）
+└── tools/                    上传脚本 · MCDR 打包 · 包结构校验</code></pre>
+
+    <div class="note w">
+      <b>代码复用</b>：<code>server/mcdr/autosync/core/</code> 是 <code>server/python/autosync/</code> 的<b>逐字节副本</b>，
+      由 <code>tools/build_mcdr.py</code>（跨平台）或 <code>build-mcdr.ps1</code>（Windows）在打包前同步并做 SHA-256 比对，
+      不一致就中止打包。业务逻辑只写一份。
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a href="https://github.com/szkele1145/AutoSync" target="_blank" rel="noopener">GitHub</a> ·
+      <a href="https://github.com/szkele1145/AutoSync/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a> ·
+      <a href="https://github.com/BalloonUpdate/McPatch2" target="_blank" rel="noopener">基于 McPatch2 改造</a>
+    </div>
+    <div style="margin-top:11px;color:#4a5261;font-size:12.5px">
+      感谢 <b style="color:var(--dim)">BalloonUpdate</b> 开源 McPatch2 —— 客户端在其基础上改造，原始版权归原作者所有
+    </div>
+    <div class="made">本项目由 <b>DeepSeek-V4.1-Flash</b> 辅助制作</div>
+  </div>
+</footer>
+
+<script>
+/* 文档索引（本地渲染，避免手写一大堆 <a>） */
+const REPO = 'https://github.com/szkele1145/AutoSync/blob/main/docs/';
+const DOCS = [
+  ['⚖️','相比原版的改进','逐条对比 McPatch2 的改动、痛点与实测数据 —— 想快速了解做了什么，先看这篇','相比原版的改进.md'],
+  ['🐧','Linux 部署','Ubuntu 24 从零部署：Python 环境、systemd 开机自启、frp 端口转发','部署-Linux.md'],
+  ['🪟','Windows 部署','Windows 上跑服务端：安装、防火墙、任务计划程序 / NSSM 自启','部署-Windows.md'],
+  ['⚙️','客户端配置','mcpatch.yml 每个键的含义、默认值与建议值','客户端配置.md'],
+  ['🐍','服务端 · Python 版','独立版安装步骤与完整命令表','服务端-Python版.md'],
+  ['🧩','服务端 · MCDR 版','MCDR 插件安装、命令表、权限与独立版的差异','服务端-MCDR版.md'],
+  ['❓','常见问题','连不上、缺前置崩溃、下载慢、mod 被清、误删恢复','常见问题.md'],
+  ['📡','MSFP 协议','MSFP v1 协议规范（给二次开发者）','MSFP协议.md'],
+];
+document.getElementById('docList').innerHTML = DOCS.map(([ic,t,d,f]) => `
+  <a class="doc" href="${REPO}${encodeURIComponent(f)}" target="_blank" rel="noopener">
+    <span class="ic">${ic}</span>
+    <span><span class="t">${t}</span><span class="d">${d}</span></span>
+  </a>`).join('');
+</script>
+</body>
+</html>
